@@ -73,7 +73,7 @@
 
     .shell { max-width: 1580px; margin: 0 auto; padding: 26px 22px 40px; }
 
-    .tab-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .tab-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
     .tab-card {
       border: none;
       border-radius: var(--radius-xl) var(--radius-xl) 0 0;
@@ -340,6 +340,7 @@
     <div class="tab-grid">
       <button class="tab-card active" data-tab="dashboard"><span class="tab-icon">📊</span><span>ダッシュボード</span></button>
       <button class="tab-card" data-tab="list"><span class="tab-icon">📋</span><span>失敗者一覧</span></button>
+      <button class="tab-card" data-tab="mail"><span class="tab-icon">✉️</span><span>メール管理</span></button>
       <button class="tab-card" data-tab="stores"><span class="tab-icon">🏬</span><span>店舗範囲管理</span></button>
     </div>
 
@@ -414,6 +415,32 @@
           <div class="table-wrap" style="margin-top:14px;"><table><thead><tr><th>判定</th><th>エラー内容</th><th>対象月</th><th>店舗開始番号</th><th>店舗名</th><th>生徒番号</th><th>生徒名</th><th>電話番号</th><th>金額</th><th>振替結果</th></tr></thead><tbody id="previewBody"></tbody></table></div>
         </div>
 
+      </section>
+
+      <section id="list" class="section">
+        <div class="card">
+          <h2>失敗者一覧</h2>
+          <div class="grid grid-4">
+            <div><label for="filterMonth">対象月</label><input type="month" id="filterMonth" /></div>
+            <div><label for="filterStore">店舗</label><select id="filterStore"><option value="">すべて</option></select></div>
+            <div><label for="filterReason">振替結果</label><select id="filterReason"><option value="">すべて</option></select></div>
+            <div><label for="filterStatus">対応ステータス</label><select id="filterStatus"><option value="">すべて</option></select></div>
+          </div>
+          <div class="grid grid-3" style="margin-top:14px;">
+            <div><label for="filterKeyword">検索</label><input type="text" id="filterKeyword" placeholder="生徒名・ふりがな・電話番号・生徒番号" /></div>
+            <div><label for="filterSpecial">特殊条件</label><select id="filterSpecial"><option value="">指定なし</option><option value="incomplete">未完了のみ</option><option value="unprocessed">未対応のみ</option><option value="scheduled">支払い予定のみ</option><option value="delayed">遅延のみ</option><option value="paid">支払い済みのみ</option><option value="ignore">無視のみ</option></select></div>
+            <div><label>&nbsp;</label><button class="btn-blue" id="applyFilterBtn" style="width:100%;">絞り込み</button></div>
+          </div>
+          <div class="actions"><button class="btn-secondary" id="resetFilterBtn">条件リセット</button><button class="btn-secondary" id="exportCsvBtn">表示中のCSV出力</button><button class="btn-danger" id="deleteAllBtn">全データ削除</button></div>
+        </div>
+        <div class="card">
+          <h2>一覧</h2>
+          <p id="listSummary" class="note"></p>
+          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>状態</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>生徒名</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>支払い完了日</th><th>社内対応</th><th>メモ</th></tr></thead><tbody id="paymentListBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="mail" class="section">
         <div class="card">
           <h2>メールアドレスCSV送信</h2>
           <p class="note">
@@ -452,6 +479,7 @@
                   <th>名前</th>
                   <th>メールアドレス</th>
                   <th>振替結果</th>
+                  <th>Resendテンプレート</th>
                   <th>対応ステータス</th>
                   <th>社内対応</th>
                 </tr>
@@ -460,28 +488,60 @@
             </table>
           </div>
         </div>
-      </section>
 
-      <section id="list" class="section">
         <div class="card">
-          <h2>失敗者一覧</h2>
-          <div class="grid grid-4">
-            <div><label for="filterMonth">対象月</label><input type="month" id="filterMonth" /></div>
-            <div><label for="filterStore">店舗</label><select id="filterStore"><option value="">すべて</option></select></div>
-            <div><label for="filterReason">振替結果</label><select id="filterReason"><option value="">すべて</option></select></div>
-            <div><label for="filterStatus">対応ステータス</label><select id="filterStatus"><option value="">すべて</option></select></div>
+          <h2>テンプレート管理</h2>
+          <p class="note">
+            Resend側で作成・公開したテンプレートIDを、振替結果ごとに登録します。<br>
+            メール送信時は、対象者の振替結果に一致する有効テンプレートを自動で使用します。
+          </p>
+
+          <div class="form-block">
+            <div class="grid grid-4">
+              <div>
+                <label for="templateFailureReason">振替結果</label>
+                <select id="templateFailureReason"></select>
+              </div>
+              <div>
+                <label for="templateName">テンプレート名</label>
+                <input type="text" id="templateName" placeholder="例：資金不足_2026年6月版" />
+              </div>
+              <div>
+                <label for="templateResendId">ResendテンプレートID / Alias</label>
+                <input type="text" id="templateResendId" placeholder="例：tmpl_xxxxx または alias" />
+              </div>
+              <div>
+                <label for="templateSubjectOverride">件名上書き（任意）</label>
+                <input type="text" id="templateSubjectOverride" placeholder="空欄ならResend側の件名" />
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn-primary" id="addTemplateBtn">テンプレートを登録</button>
+            </div>
           </div>
-          <div class="grid grid-3" style="margin-top:14px;">
-            <div><label for="filterKeyword">検索</label><input type="text" id="filterKeyword" placeholder="生徒名・ふりがな・電話番号・生徒番号" /></div>
-            <div><label for="filterSpecial">特殊条件</label><select id="filterSpecial"><option value="">指定なし</option><option value="incomplete">未完了のみ</option><option value="unprocessed">未対応のみ</option><option value="scheduled">支払い予定のみ</option><option value="delayed">遅延のみ</option><option value="paid">支払い済みのみ</option><option value="ignore">無視のみ</option></select></div>
-            <div><label>&nbsp;</label><button class="btn-blue" id="applyFilterBtn" style="width:100%;">絞り込み</button></div>
-          </div>
-          <div class="actions"><button class="btn-secondary" id="resetFilterBtn">条件リセット</button><button class="btn-secondary" id="exportCsvBtn">表示中のCSV出力</button><button class="btn-danger" id="deleteAllBtn">全データ削除</button></div>
         </div>
+
         <div class="card">
-          <h2>一覧</h2>
-          <p id="listSummary" class="note"></p>
-          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>状態</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>生徒名</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>支払い完了日</th><th>社内対応</th><th>メモ</th></tr></thead><tbody id="paymentListBody"></tbody></table></div>
+          <h2>登録済みテンプレート</h2>
+          <p class="note">
+            有効にできるテンプレートは、同じ振替結果につき1つだけです。新しいテンプレートを有効化すると、同じ振替結果の他テンプレートは自動で無効になります。
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>状態</th>
+                  <th>振替結果</th>
+                  <th>テンプレート名</th>
+                  <th>ResendテンプレートID / Alias</th>
+                  <th>件名上書き</th>
+                  <th>更新日</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="templateListBody"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -535,6 +595,7 @@
     let storeRanges = [];
     let previewRows = [];
     let emailSendRows = [];
+    let emailTemplates = [];
     let currentFilteredRows = [];
     let dashboardFilteredRows = [];
 
@@ -588,6 +649,13 @@
       emailPreviewCard: document.getElementById('emailPreviewCard'),
       emailPreviewSummary: document.getElementById('emailPreviewSummary'),
       emailPreviewBody: document.getElementById('emailPreviewBody'),
+
+      templateFailureReason: document.getElementById('templateFailureReason'),
+      templateName: document.getElementById('templateName'),
+      templateResendId: document.getElementById('templateResendId'),
+      templateSubjectOverride: document.getElementById('templateSubjectOverride'),
+      addTemplateBtn: document.getElementById('addTemplateBtn'),
+      templateListBody: document.getElementById('templateListBody'),
       filterMonth: document.getElementById('filterMonth'),
       filterStore: document.getElementById('filterStore'),
       filterReason: document.getElementById('filterReason'),
@@ -628,6 +696,7 @@
 
     async function init() {
       bindEvents();
+      populateTemplateFailureReasons();
       renderEmptyState();
 
       try {
@@ -768,6 +837,7 @@
       els.emailPreviewBtn.addEventListener('click', handleEmailPreview);
       els.emailSendBtn.addEventListener('click', sendPreviewEmails);
       els.emailClearBtn.addEventListener('click', clearEmailPreview);
+      els.addTemplateBtn.addEventListener('click', addEmailTemplate);
       els.applyFilterBtn.addEventListener('click', applyFilters);
       els.resetFilterBtn.addEventListener('click', resetFilters);
       els.exportCsvBtn.addEventListener('click', exportFilteredCsv);
@@ -801,6 +871,7 @@
       els.sections.forEach(section => section.classList.toggle('active', section.id === tabId));
       if (tabId === 'dashboard') { applyDashboardFilters(); renderDashboard(); }
       if (tabId === 'list') { populateFilters(); applyFilters(); }
+      if (tabId === 'mail') renderEmailTemplateTable();
       if (tabId === 'stores') renderStoreRangeTable();
     }
 
@@ -809,10 +880,11 @@
       currentFilteredRows = [];
       renderDashboard();
       renderPaymentList();
+      renderEmailTemplateTable();
       renderStoreRangeTable();
     }
 
-    async function loadAllData() { await Promise.all([loadStoreRanges(), loadPayments()]); }
+    async function loadAllData() { await Promise.all([loadStoreRanges(), loadPayments(), loadEmailTemplates()]); }
 
     async function loadStoreRanges() {
       const { data, error } = await supabaseClient.from('payment_store_ranges').select('*').eq('is_active', true).order('start_number', { ascending: true });
@@ -825,6 +897,27 @@
       const { data, error } = await supabaseClient.from('failed_payments').select('*').order('target_month', { ascending: false }).order('store_name', { ascending: true }).order('student_number', { ascending: true });
       if (error) throw new Error('失敗者データの取得に失敗しました：' + error.message);
       payments = data || [];
+    }
+
+
+    async function loadEmailTemplates() {
+      const { data, error } = await supabaseClient
+        .from('payment_email_templates')
+        .select('*')
+        .order('failure_reason', { ascending: true })
+        .order('updated_at', { ascending: false });
+
+      if (error) throw new Error('テンプレート管理データの取得に失敗しました：' + error.message);
+
+      emailTemplates = data || [];
+      renderEmailTemplateTable();
+    }
+
+    function getActiveEmailTemplate(failureReason) {
+      return emailTemplates.find(template =>
+        template.failure_reason === failureReason &&
+        template.is_active === true
+      ) || null;
     }
 
     function normalizeText(value) { return String(value ?? '').trim(); }
@@ -1266,6 +1359,173 @@
     }
 
 
+
+    function populateTemplateFailureReasons() {
+      populateSelect(els.templateFailureReason, FAILURE_REASONS, '選択してください');
+    }
+
+    function renderEmailTemplateTable() {
+      if (!els.templateListBody) return;
+
+      els.templateListBody.innerHTML = '';
+
+      if (!emailTemplates || emailTemplates.length === 0) {
+        els.templateListBody.innerHTML = '<tr><td colspan="7" class="placeholder-box">テンプレートが登録されていません。</td></tr>';
+        return;
+      }
+
+      const sorted = [...emailTemplates].sort((a, b) => {
+        const reasonCompare = String(a.failure_reason || '').localeCompare(String(b.failure_reason || ''), 'ja');
+        if (reasonCompare !== 0) return reasonCompare;
+        return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+      });
+
+      sorted.forEach(template => {
+        const tr = document.createElement('tr');
+
+        const activeBadge = template.is_active
+          ? '<span class="badge badge-green">有効</span>'
+          : '<span class="badge">無効</span>';
+
+        const activateBtn = template.is_active
+          ? `<button class="btn-secondary btn-small" onclick="setEmailTemplateActive('${template.id}', false)">無効化</button>`
+          : `<button class="btn-blue btn-small" onclick="setEmailTemplateActive('${template.id}', true)">有効化</button>`;
+
+        tr.innerHTML = `
+          <td>${activeBadge}</td>
+          <td>${escapeHtml(template.failure_reason || '')}</td>
+          <td>${escapeHtml(template.template_name || '')}</td>
+          <td>${escapeHtml(template.resend_template_id || '')}</td>
+          <td>${escapeHtml(template.subject_override || '')}</td>
+          <td>${escapeHtml(formatDateTime(template.updated_at || template.created_at || ''))}</td>
+          <td>
+            ${activateBtn}
+            <button class="btn-danger btn-small" onclick="deleteEmailTemplate('${template.id}')">削除</button>
+          </td>
+        `;
+
+        els.templateListBody.appendChild(tr);
+      });
+    }
+
+    async function addEmailTemplate() {
+      if (!supabaseClient) {
+        alert('Supabase設定をしてください。');
+        return;
+      }
+
+      const failureReason = normalizeText(els.templateFailureReason.value);
+      const templateName = normalizeText(els.templateName.value);
+      const resendTemplateId = normalizeText(els.templateResendId.value);
+      const subjectOverride = normalizeText(els.templateSubjectOverride.value);
+
+      if (!failureReason) {
+        alert('振替結果を選択してください。');
+        return;
+      }
+
+      if (!templateName) {
+        alert('テンプレート名を入力してください。');
+        return;
+      }
+
+      if (!resendTemplateId) {
+        alert('ResendテンプレートID / Aliasを入力してください。');
+        return;
+      }
+
+      const now = new Date().toISOString();
+
+      const { error: deactivateError } = await supabaseClient
+        .from('payment_email_templates')
+        .update({ is_active: false, updated_at: now })
+        .eq('failure_reason', failureReason)
+        .eq('is_active', true);
+
+      if (deactivateError) {
+        alert('既存テンプレートの無効化に失敗しました：' + deactivateError.message);
+        return;
+      }
+
+      const { error } = await supabaseClient
+        .from('payment_email_templates')
+        .insert({
+          failure_reason: failureReason,
+          template_name: templateName,
+          resend_template_id: resendTemplateId,
+          subject_override: subjectOverride || null,
+          is_active: true,
+          updated_at: now
+        });
+
+      if (error) {
+        alert('テンプレート登録に失敗しました：' + error.message);
+        return;
+      }
+
+      els.templateName.value = '';
+      els.templateResendId.value = '';
+      els.templateSubjectOverride.value = '';
+
+      await loadEmailTemplates();
+      alert('テンプレートを登録しました。');
+    }
+
+    async function setEmailTemplateActive(id, isActive) {
+      if (!supabaseClient) return;
+
+      const target = emailTemplates.find(template => template.id === id);
+      if (!target) {
+        alert('対象テンプレートが見つかりません。');
+        return;
+      }
+
+      const now = new Date().toISOString();
+
+      if (isActive) {
+        const { error: deactivateError } = await supabaseClient
+          .from('payment_email_templates')
+          .update({ is_active: false, updated_at: now })
+          .eq('failure_reason', target.failure_reason)
+          .eq('is_active', true);
+
+        if (deactivateError) {
+          alert('既存テンプレートの無効化に失敗しました：' + deactivateError.message);
+          return;
+        }
+      }
+
+      const { error } = await supabaseClient
+        .from('payment_email_templates')
+        .update({ is_active: isActive, updated_at: now })
+        .eq('id', id);
+
+      if (error) {
+        alert('テンプレート状態の更新に失敗しました：' + error.message);
+        return;
+      }
+
+      await loadEmailTemplates();
+    }
+
+    async function deleteEmailTemplate(id) {
+      if (!supabaseClient) return;
+
+      if (!confirm('このテンプレート設定を削除します。よろしいですか？')) return;
+
+      const { error } = await supabaseClient
+        .from('payment_email_templates')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        alert('テンプレート削除に失敗しました：' + error.message);
+        return;
+      }
+
+      await loadEmailTemplates();
+    }
+
     function mapEmailCsvRows(rows) {
       if (rows.length === 0) return [];
 
@@ -1323,6 +1583,7 @@
             student_name: '',
             customer_email: email,
             failure_reason: '',
+            template_name: '',
             handling_status: '',
             internal_status: ''
           });
@@ -1345,6 +1606,7 @@
             student_name: '',
             customer_email: email,
             failure_reason: '',
+            template_name: '',
             handling_status: '',
             internal_status: ''
           });
@@ -1365,6 +1627,7 @@
             student_name: matches[0]?.student_name || '',
             customer_email: email,
             failure_reason: '',
+            template_name: '',
             handling_status: '',
             internal_status: ''
           });
@@ -1385,6 +1648,7 @@
             student_name: unpaidMatches[0]?.student_name || '',
             customer_email: email,
             failure_reason: unpaidMatches.map(payment => payment.failure_reason).join(' / '),
+            template_name: unpaidMatches.map(payment => getActiveEmailTemplate(payment.failure_reason)?.template_name || '').filter(Boolean).join(' / '),
             handling_status: unpaidMatches.map(payment => payment.handling_status).join(' / '),
             internal_status: unpaidMatches.map(payment => renderInternalContactSummary(payment)).join(' / ')
           });
@@ -1404,6 +1668,7 @@
               student_name: payment.student_name,
               customer_email: email,
               failure_reason: payment.failure_reason,
+              template_name: getActiveEmailTemplate(payment.failure_reason)?.template_name || '',
               handling_status: payment.handling_status,
               internal_status: renderInternalContactSummary(payment)
             });
@@ -1412,10 +1677,17 @@
 
           seenPaymentIds.add(payment.id);
 
+          const activeTemplate = getActiveEmailTemplate(payment.failure_reason);
+          const templateErrors = [];
+
+          if (!activeTemplate) {
+            templateErrors.push(`振替結果「${payment.failure_reason}」の有効なResendテンプレートが未登録です`);
+          }
+
           resultRows.push({
             row_number: headerRowIndex + index + 2,
-            is_valid: true,
-            errors: [],
+            is_valid: templateErrors.length === 0,
+            errors: templateErrors,
             failed_payment_id: payment.id,
             target_month: payment.target_month,
             store_name: payment.store_name,
@@ -1423,6 +1695,7 @@
             student_name: payment.student_name,
             customer_email: email,
             failure_reason: payment.failure_reason,
+            template_name: activeTemplate ? activeTemplate.template_name : '',
             handling_status: payment.handling_status,
             internal_status: renderInternalContactSummary(payment)
           });
@@ -1489,6 +1762,7 @@
           <td>${escapeHtml(row.student_name || '')}</td>
           <td>${escapeHtml(row.customer_email || '')}</td>
           <td>${escapeHtml(row.failure_reason || '')}</td>
+          <td>${escapeHtml(row.template_name || '')}</td>
           <td>${escapeHtml(row.handling_status || '')}</td>
           <td>${escapeHtml(row.internal_status || '')}</td>
         `;
@@ -2107,6 +2381,8 @@
     window.deletePayment = deletePayment;
     window.updateStoreRange = updateStoreRange;
     window.deleteStoreRange = deleteStoreRange;
+    window.setEmailTemplateActive = setEmailTemplateActive;
+    window.deleteEmailTemplate = deleteEmailTemplate;
 
     init();
   </script>
