@@ -168,6 +168,85 @@
     .app-message { display: none; margin-bottom: 18px; }
     .app-message.active { display: block; }
 
+
+    .auth-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      background: var(--bg);
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 460px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    .auth-logo {
+      color: var(--main-red);
+      font-size: 38px;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .auth-title {
+      font-size: 22px;
+      font-weight: 900;
+      margin: 0 0 8px;
+      color: var(--text);
+    }
+
+    .auth-description {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+      margin: 0 0 18px;
+    }
+
+    .auth-error {
+      display: none;
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      color: #9f1239;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-top: 12px;
+      font-weight: 800;
+    }
+
+    .auth-error.active {
+      display: block;
+    }
+
+    .login-user {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 14px;
+    }
+
+    body.auth-locked .topbar,
+    body.auth-locked .shell,
+    body.auth-locked .modal-bg {
+      display: none !important;
+    }
+
+    body:not(.auth-locked) #authScreen {
+      display: none !important;
+    }
+
     @media (max-width: 1200px) {
       .summary-grid, .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
       .topbar { flex-direction: column; align-items: flex-start; }
@@ -179,15 +258,44 @@
     }
   </style>
 </head>
-<body>
+<body class="auth-locked">
+
+  <div id="authScreen" class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-logo">refinas</div>
+      <h1 class="auth-title">ログイン</h1>
+      <p class="auth-description">
+        口座振替失敗者 管理ツールにアクセスするには、Supabase Authenticationで作成したユーザーでログインしてください。
+      </p>
+
+      <div>
+        <label for="loginEmail">メールアドレス</label>
+        <input type="email" id="loginEmail" placeholder="example@refinas.jp" autocomplete="email" />
+      </div>
+
+      <div style="margin-top:14px;">
+        <label for="loginPassword">パスワード</label>
+        <input type="password" id="loginPassword" placeholder="パスワード" autocomplete="current-password" />
+      </div>
+
+      <div class="actions">
+        <button class="btn-primary" id="loginBtn" style="width:100%;">ログイン</button>
+      </div>
+
+      <div id="loginError" class="auth-error"></div>
+    </div>
+  </div>
+
   <div class="topbar">
     <div class="brand-wrap">
       <div class="brand">refinas</div>
       <div class="brand-sub">口座振替失敗者 管理ツール</div>
     </div>
     <div class="header-actions">
+      <div class="login-user" id="loginUserLabel">未ログイン</div>
       <button class="pill-btn secondary" id="reloadBtn">再読み込み</button>
       <button class="pill-btn" id="openImportTabBtn">CSVインポートへ</button>
+      <button class="pill-btn secondary" id="logoutBtn">ログアウト</button>
     </div>
   </div>
 
@@ -322,8 +430,8 @@
   </div>
 
   <script>
-    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const SUPABASE_URL = 'https://eaavekzooexzxzpjqnyg.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_f0GCrWtUJ5xV5k5B2y5ZSw_kIxDBAS0';
 
     let supabaseClient = null;
 
@@ -342,6 +450,14 @@
     const els = {
       tabCards: document.querySelectorAll('.tab-card'),
       sections: document.querySelectorAll('.section'),
+
+      authScreen: document.getElementById('authScreen'),
+      loginEmail: document.getElementById('loginEmail'),
+      loginPassword: document.getElementById('loginPassword'),
+      loginBtn: document.getElementById('loginBtn'),
+      loginError: document.getElementById('loginError'),
+      loginUserLabel: document.getElementById('loginUserLabel'),
+      logoutBtn: document.getElementById('logoutBtn'),
       appMessage: document.getElementById('appMessage'),
       reloadBtn: document.getElementById('reloadBtn'),
       openImportTabBtn: document.getElementById('openImportTabBtn'),
@@ -417,24 +533,130 @@
 
       try {
         if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR_SUPABASE_URL') || SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY')) {
-          showMessage('Supabase設定が未入力です', 'HTML内の SUPABASE_URL と SUPABASE_ANON_KEY を実際の値に差し替えてください。タブの切り替えはこの状態でも動きます。');
+          showMessage('Supabase設定が未入力です', 'HTML内の SUPABASE_URL と SUPABASE_ANON_KEY を実際の値に差し替えてください。');
+          showLogin();
           return;
         }
 
         supabaseClient = createSupabaseClient();
-        await loadAllData();
-        clearMessage();
-        populateFilters();
-        populateDashboardFilters();
-        applyDashboardFilters();
-        renderDashboard();
-        applyFilters();
+
+        const { data, error } = await supabaseClient.auth.getSession();
+
+        if (error) {
+          showMessage('ログイン状態確認エラー', error.message);
+          showLogin();
+          return;
+        }
+
+        if (data && data.session && data.session.user) {
+          await showApp(data.session.user);
+        } else {
+          showLogin();
+        }
       } catch (error) {
         showMessage('読み込みエラー', String(error.message || error));
+        showLogin();
       }
     }
 
+    function showLogin() {
+      document.body.classList.add('auth-locked');
+      if (els.loginUserLabel) els.loginUserLabel.textContent = '未ログイン';
+    }
+
+    async function showApp(user) {
+      document.body.classList.remove('auth-locked');
+      if (els.loginUserLabel) els.loginUserLabel.textContent = user.email || 'ログイン中';
+
+      await loadAllData();
+
+      clearMessage();
+      populateFilters();
+      populateDashboardFilters();
+      applyDashboardFilters();
+      renderDashboard();
+      applyFilters();
+    }
+
+    function setLoginError(message) {
+      if (!els.loginError) return;
+
+      if (!message) {
+        els.loginError.textContent = '';
+        els.loginError.classList.remove('active');
+        return;
+      }
+
+      els.loginError.textContent = message;
+      els.loginError.classList.add('active');
+    }
+
+    async function handleLogin() {
+      const email = normalizeText(els.loginEmail.value);
+      const password = String(els.loginPassword.value || '');
+
+      if (!email || !password) {
+        setLoginError('メールアドレスとパスワードを入力してください。');
+        return;
+      }
+
+      setLoginError('');
+      els.loginBtn.disabled = true;
+      els.loginBtn.textContent = 'ログイン中...';
+
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (error) {
+          setLoginError('ログインに失敗しました：' + error.message);
+          return;
+        }
+
+        if (!data || !data.user) {
+          setLoginError('ログインに失敗しました。ユーザー情報を取得できませんでした。');
+          return;
+        }
+
+        els.loginPassword.value = '';
+        await showApp(data.user);
+      } catch (error) {
+        setLoginError('ログインに失敗しました：' + String(error.message || error));
+      } finally {
+        els.loginBtn.disabled = false;
+        els.loginBtn.textContent = 'ログイン';
+      }
+    }
+
+    async function handleLogout() {
+      if (!confirm('ログアウトしますか？')) return;
+
+      const { error } = await supabaseClient.auth.signOut();
+
+      if (error) {
+        alert('ログアウトに失敗しました：' + error.message);
+        return;
+      }
+
+      payments = [];
+      storeRanges = [];
+      previewRows = [];
+      currentFilteredRows = [];
+      dashboardFilteredRows = [];
+
+      renderEmptyState();
+      showLogin();
+    }
+
     function bindEvents() {
+      els.loginBtn.addEventListener('click', handleLogin);
+      els.loginPassword.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') handleLogin();
+      });
+      els.logoutBtn.addEventListener('click', handleLogout);
+
       els.tabCards.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
       els.reloadBtn.addEventListener('click', reloadData);
       els.openImportTabBtn.addEventListener('click', () => switchTab('import'));
