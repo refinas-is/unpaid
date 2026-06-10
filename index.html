@@ -155,6 +155,43 @@
     .success-text { color: var(--success); font-weight: 900; }
     .error-text { color: var(--main-red); font-weight: 900; }
 
+
+    .notice-cell { min-width: 92px; }
+    .status-cell { min-width: 240px; }
+    .status-chip-wrap { margin-top: 0; }
+    .internal-contact-cell { min-width: 260px; }
+    .contact-toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: nowrap;
+    }
+    .contact-toggle {
+      border: 1px solid #e5d7cb;
+      background: #fff;
+      color: #6b5b52;
+      border-radius: 999px;
+      padding: 6px 9px;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .contact-toggle.active {
+      border-color: var(--main-blue);
+      background: #e7f2fb;
+      color: var(--main-blue);
+    }
+    .contact-toggle:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+    .email-missing {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
     .modal-bg { display: none; position: fixed; inset: 0; background: rgba(30, 20, 12, 0.45); z-index: 50; padding: 20px; overflow: auto; }
     .modal-bg.active { display: block; }
     .modal { background: #fff; max-width: 980px; margin: 40px auto; border-radius: 22px; padding: 22px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18); }
@@ -332,19 +369,19 @@
         <div class="card">
           <h2>未完了の人</h2>
           <p class="note" id="dashIncompleteSummary"></p>
-          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>名前</th><th>電話番号</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>メモ</th></tr></thead><tbody id="dashIncompleteBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>状態</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>名前</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>社内対応</th><th>メモ</th></tr></thead><tbody id="dashIncompleteBody"></tbody></table></div>
         </div>
 
         <div class="card">
           <h2>遅延の人</h2>
           <p class="note" id="dashDelayedSummary"></p>
-          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>名前</th><th>電話番号</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>メモ</th></tr></thead><tbody id="dashDelayedBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>状態</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>名前</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>社内対応</th><th>メモ</th></tr></thead><tbody id="dashDelayedBody"></tbody></table></div>
         </div>
 
         <div class="card">
           <h2>未対応の人</h2>
           <p class="note" id="dashUnprocessedSummary"></p>
-          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>名前</th><th>電話番号</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>メモ</th></tr></thead><tbody id="dashUnprocessedBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>状態</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>名前</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>社内対応</th><th>メモ</th></tr></thead><tbody id="dashUnprocessedBody"></tbody></table></div>
         </div>
 
         <div class="card">
@@ -397,7 +434,7 @@
         <div class="card">
           <h2>一覧</h2>
           <p id="listSummary" class="note"></p>
-          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>生徒名</th><th>電話番号</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>支払い完了日</th><th>メモ</th></tr></thead><tbody id="paymentListBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>状態</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>生徒名</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>支払い完了日</th><th>社内対応</th><th>メモ</th></tr></thead><tbody id="paymentListBody"></tbody></table></div>
         </div>
       </section>
 
@@ -440,6 +477,12 @@
     const SCHEDULED_STATUSES = ['店舗支払い予定（日付未定）', '店舗支払い予定（日付決定）', '口座振り込み予定（日付決定）'];
     const DATE_REQUIRED_STATUSES = ['店舗支払い予定（日付決定）', '口座振り込み予定（日付決定）'];
     const PAID_STATUSES = ['店舗支払い済み', '口座振り込み済み'];
+    const INTERNAL_CONTACT_FLAGS = [
+      { field: 'phone_called', label: '電話', logLabel: '電話済み' },
+      { field: 'store_contacted', label: '声掛け', logLabel: '店頭声掛け済み' },
+      { field: 'sms_sent', label: 'SMS', logLabel: 'ショートメッセージ済み' },
+      { field: 'email_sent', label: 'メール', logLabel: 'メール済み' }
+    ];
 
     let payments = [];
     let storeRanges = [];
@@ -773,6 +816,35 @@
       return '';
     }
 
+
+    function getNoticeBadgeHtml(item) {
+      if (isDelayed(item)) return '<span class="badge badge-red">遅延</span>';
+      if (item.handling_status === '未対応') return '<span class="badge badge-red">未対応</span>';
+      if (item.handling_status === '無視') return '<span class="badge badge-gray">無視</span>';
+      if (item.handling_status === '店舗支払い済み') return '<span class="badge badge-green">店舗済</span>';
+      if (item.handling_status === '口座振り込み済み') return '<span class="badge badge-blue">振込済</span>';
+      if (String(item.handling_status || '').includes('予定')) return '<span class="badge badge-orange">予定</span>';
+      return '';
+    }
+
+    function renderInternalContactControls(item) {
+      return `<div class="contact-toggle-wrap">
+        ${INTERNAL_CONTACT_FLAGS.map(flag => {
+          const isActive = Boolean(item[flag.field]);
+          return `<button type="button" class="contact-toggle ${isActive ? 'active' : ''}" onclick="updateInternalContactFlag('${item.id}', '${flag.field}', ${isActive ? 'false' : 'true'})">${escapeHtml(flag.label)}</button>`;
+        }).join('')}
+      </div>`;
+    }
+
+    function renderInternalContactSummary(item) {
+      const labels = INTERNAL_CONTACT_FLAGS
+        .filter(flag => Boolean(item[flag.field]))
+        .map(flag => flag.logLabel);
+
+      return labels.length > 0 ? labels.join(' / ') : '未実施';
+    }
+
+
     function detectCsvDelimiter(text) {
       const lines = String(text || '')
         .replace(/^\uFEFF/, '')
@@ -935,6 +1007,7 @@
         student_kana: findHeaderIndex(headers, ['ふりがな', 'フリガナ']),
         phone: findHeaderIndex(headers, ['電話番号', '電話']),
         account_holder: findHeaderIndex(headers, ['口座名義']),
+        customer_email: findHeaderIndex(headers, ['メールアドレス', 'メール', 'email', 'Email']),
         amount: findHeaderIndex(headers, ['金額']),
         failure_reason: findHeaderIndex(headers, ['振替結果'])
       };
@@ -988,6 +1061,7 @@
           student_kana: col.student_kana >= 0 ? normalizeText(row[col.student_kana]) : '',
           phone: col.phone >= 0 ? normalizeText(row[col.phone]) : '',
           account_holder: col.account_holder >= 0 ? normalizeText(row[col.account_holder]) : '',
+          customer_email: col.customer_email >= 0 ? normalizeText(row[col.customer_email]) : '',
           amount: col.amount >= 0 ? normalizeAmount(row[col.amount]) : null,
           failure_reason: failureReason,
           handling_status: '未対応',
@@ -1098,6 +1172,11 @@
         student_kana: row.student_kana || null,
         phone: row.phone || null,
         account_holder: row.account_holder || null,
+        customer_email: row.customer_email || null,
+        phone_called: false,
+        store_contacted: false,
+        sms_sent: false,
+        email_sent: false,
         amount: row.amount,
         failure_reason: row.failure_reason,
         handling_status: row.handling_status,
@@ -1228,7 +1307,7 @@
     function renderDashboardPersonTable(tbody, rows) {
       tbody.innerHTML = '';
       if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" class="placeholder-box">該当データがありません。</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="placeholder-box">該当データがありません。</td></tr>';
         return;
       }
 
@@ -1241,11 +1320,11 @@
           <td>
             <button class="btn-secondary btn-small" onclick="openDetailModal('${item.id}')">詳細</button>
           </td>
+          <td class="notice-cell">${getNoticeBadgeHtml(item)}</td>
           <td>${escapeHtml(item.target_month)}</td>
           <td>${escapeHtml(item.store_name)}</td>
           <td>${escapeHtml(item.student_number)}</td>
           <td>${escapeHtml(item.student_name)}</td>
-          <td>${escapeHtml(item.phone || '')}</td>
           <td>${formatYen(item.amount)}</td>
           <td>${escapeHtml(item.failure_reason)}</td>
           <td class="status-cell">
@@ -1256,16 +1335,12 @@
                 </option>
               `).join('')}
             </select>
-            <div class="status-chip-wrap">
-              <span class="badge ${getStatusBadgeClass(item.handling_status)}">
-                ${escapeHtml(item.handling_status)}
-              </span>
-            </div>
           </td>
           <td class="due-wrap">
             <input type="date" value="${escapeHtml(item.payment_due_date || '')}" onchange="updatePaymentField('${item.id}', 'payment_due_date', this.value || null)" />
             ${delayedHtml}
           </td>
+          <td class="internal-contact-cell">${renderInternalContactControls(item)}</td>
           <td>
             <input type="text" value="${escapeHtml(item.memo || '')}" onchange="updatePaymentField('${item.id}', 'memo', this.value)" />
           </td>
@@ -1279,16 +1354,79 @@
       els.paymentListBody.innerHTML = '';
       els.listSummary.textContent = `表示中 ${currentFilteredRows.length} 件 / 全 ${payments.length} 件`;
       if (currentFilteredRows.length === 0) {
-        els.paymentListBody.innerHTML = '<tr><td colspan="12" class="placeholder-box">該当データがありません。</td></tr>';
+        els.paymentListBody.innerHTML = '<tr><td colspan="13" class="placeholder-box">該当データがありません。</td></tr>';
         return;
       }
       currentFilteredRows.forEach(item => {
         const tr = document.createElement('tr');
         tr.className = getRowClass(item);
         const delayedHtml = isDelayed(item) ? '<span class="delay-alert">遅延</span>' : '';
-        tr.innerHTML = `<td><button class="btn-secondary btn-small" onclick="openDetailModal('${item.id}')">詳細</button></td><td>${escapeHtml(item.target_month)}</td><td>${escapeHtml(item.store_name)}</td><td>${escapeHtml(item.student_number)}</td><td>${escapeHtml(item.student_name)}</td><td>${escapeHtml(item.phone || '')}</td><td>${formatYen(item.amount)}</td><td>${escapeHtml(item.failure_reason)}</td><td class="status-cell"><select onchange="updatePaymentStatus('${item.id}', this.value)">${HANDLING_STATUSES.map(status => `<option value="${escapeHtml(status)}" ${item.handling_status === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}</select><div class="status-chip-wrap"><span class="badge ${getStatusBadgeClass(item.handling_status)}">${escapeHtml(item.handling_status)}</span></div></td><td class="due-wrap"><input type="date" value="${escapeHtml(item.payment_due_date || '')}" onchange="updatePaymentField('${item.id}', 'payment_due_date', this.value || null)" />${delayedHtml}</td><td><input type="date" value="${escapeHtml(item.paid_at || '')}" onchange="updatePaymentField('${item.id}', 'paid_at', this.value || null)" /></td><td><input type="text" value="${escapeHtml(item.memo || '')}" onchange="updatePaymentField('${item.id}', 'memo', this.value)" /></td>`;
+        tr.innerHTML = `
+          <td><button class="btn-secondary btn-small" onclick="openDetailModal('${item.id}')">詳細</button></td>
+          <td class="notice-cell">${getNoticeBadgeHtml(item)}</td>
+          <td>${escapeHtml(item.target_month)}</td>
+          <td>${escapeHtml(item.store_name)}</td>
+          <td>${escapeHtml(item.student_number)}</td>
+          <td>${escapeHtml(item.student_name)}</td>
+          <td>${formatYen(item.amount)}</td>
+          <td>${escapeHtml(item.failure_reason)}</td>
+          <td class="status-cell">
+            <select onchange="updatePaymentStatus('${item.id}', this.value)">
+              ${HANDLING_STATUSES.map(status => `<option value="${escapeHtml(status)}" ${item.handling_status === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}
+            </select>
+          </td>
+          <td class="due-wrap">
+            <input type="date" value="${escapeHtml(item.payment_due_date || '')}" onchange="updatePaymentField('${item.id}', 'payment_due_date', this.value || null)" />
+            ${delayedHtml}
+          </td>
+          <td><input type="date" value="${escapeHtml(item.paid_at || '')}" onchange="updatePaymentField('${item.id}', 'paid_at', this.value || null)" /></td>
+          <td class="internal-contact-cell">${renderInternalContactControls(item)}</td>
+          <td><input type="text" value="${escapeHtml(item.memo || '')}" onchange="updatePaymentField('${item.id}', 'memo', this.value)" /></td>
+        `;
         els.paymentListBody.appendChild(tr);
       });
+    }
+
+    async function updateInternalContactFlag(id, field, value) {
+      if (!supabaseClient) return;
+
+      const flag = INTERNAL_CONTACT_FLAGS.find(item => item.field === field);
+
+      if (!flag) {
+        alert('不正な社内対応項目です。');
+        return;
+      }
+
+      const item = payments.find(row => row.id === id);
+      if (!item) return;
+
+      const payload = {
+        [field]: Boolean(value),
+        updated_at: new Date().toISOString()
+      };
+
+      if (field === 'email_sent' && Boolean(value)) {
+        payload.email_marked_at = new Date().toISOString();
+      }
+
+      const { error } = await supabaseClient.from('failed_payments').update(payload).eq('id', id);
+
+      if (error) {
+        alert('社内対応ステータスの更新に失敗しました：' + error.message);
+        return;
+      }
+
+      await supabaseClient.from('failed_payment_logs').insert({
+        failed_payment_id: id,
+        action_type: '社内対応更新',
+        action_detail: `${flag.logLabel}: ${Boolean(item[field]) ? 'ON' : 'OFF'} → ${Boolean(value) ? 'ON' : 'OFF'}`
+      });
+
+      await loadPayments();
+      populateDashboardFilters();
+      applyDashboardFilters();
+      renderDashboard();
+      applyFilters();
     }
 
     async function updatePaymentStatus(id, newStatus) {
@@ -1347,7 +1485,51 @@
         logs = result.data || [];
       }
       const delayedHtml = isDelayed(item) ? '<span class="delay-alert">遅延</span>' : '';
-      els.detailContent.innerHTML = `<div class="grid grid-2"><div class="card"><h3>基本情報</h3><table><tbody><tr><th>対象月</th><td>${escapeHtml(item.target_month)}</td></tr><tr><th>店舗開始番号</th><td>${escapeHtml(item.store_start_number)}</td></tr><tr><th>店舗名</th><td>${escapeHtml(item.store_name)}</td></tr><tr><th>生徒番号</th><td>${escapeHtml(item.student_number)}</td></tr><tr><th>生徒名</th><td>${escapeHtml(item.student_name)}</td></tr><tr><th>ふりがな</th><td>${escapeHtml(item.student_kana || '')}</td></tr><tr><th>電話番号</th><td>${escapeHtml(item.phone || '')}</td></tr></tbody></table></div><div class="card"><h3>振替・対応情報</h3><table><tbody><tr><th>口座名義</th><td>${escapeHtml(item.account_holder || '')}</td></tr><tr><th>金額</th><td>${formatYen(item.amount)}</td></tr><tr><th>振替結果</th><td>${escapeHtml(item.failure_reason)}</td></tr><tr><th>対応ステータス</th><td><span class="badge ${getStatusBadgeClass(item.handling_status)}">${escapeHtml(item.handling_status)}</span></td></tr><tr><th>支払い予定日</th><td>${escapeHtml(item.payment_due_date || '')} ${delayedHtml}</td></tr><tr><th>支払い完了日</th><td>${escapeHtml(item.paid_at || '')}</td></tr><tr><th>支払い方法</th><td>${escapeHtml(item.paid_method || '')}</td></tr><tr><th>メモ</th><td>${escapeHtml(item.memo || '')}</td></tr><tr><th>更新日時</th><td>${escapeHtml(formatDateTime(item.updated_at))}</td></tr></tbody></table></div></div><div class="card"><h3>対応履歴</h3><div class="log-list">${logs.length > 0 ? logs.map(log => `<div class="log-item"><strong>${escapeHtml(formatDateTime(log.created_at))} / ${escapeHtml(log.action_type)}</strong><div>${escapeHtml(log.action_detail || '')}</div></div>`).join('') : '<div class="log-item">履歴はありません。</div>'}</div></div><div class="actions"><button class="btn-danger" onclick="deletePayment('${item.id}')">このデータを削除</button></div>`;
+      els.detailContent.innerHTML = `
+        <div class="grid grid-2">
+          <div class="card">
+            <h3>基本情報</h3>
+            <table>
+              <tbody>
+                <tr><th>対象月</th><td>${escapeHtml(item.target_month)}</td></tr>
+                <tr><th>店舗開始番号</th><td>${escapeHtml(item.store_start_number)}</td></tr>
+                <tr><th>店舗名</th><td>${escapeHtml(item.store_name)}</td></tr>
+                <tr><th>生徒番号</th><td>${escapeHtml(item.student_number)}</td></tr>
+                <tr><th>生徒名</th><td>${escapeHtml(item.student_name)}</td></tr>
+                <tr><th>ふりがな</th><td>${escapeHtml(item.student_kana || '')}</td></tr>
+                <tr><th>電話番号</th><td>${escapeHtml(item.phone || '')}</td></tr>
+                <tr><th>メールアドレス</th><td>${escapeHtml(item.customer_email || '')}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>振替・対応情報</h3>
+            <table>
+              <tbody>
+                <tr><th>状態</th><td>${getNoticeBadgeHtml(item)}</td></tr>
+                <tr><th>口座名義</th><td>${escapeHtml(item.account_holder || '')}</td></tr>
+                <tr><th>金額</th><td>${formatYen(item.amount)}</td></tr>
+                <tr><th>振替結果</th><td>${escapeHtml(item.failure_reason)}</td></tr>
+                <tr><th>対応ステータス</th><td><span class="badge ${getStatusBadgeClass(item.handling_status)}">${escapeHtml(item.handling_status)}</span></td></tr>
+                <tr><th>支払い予定日</th><td>${escapeHtml(item.payment_due_date || '')} ${delayedHtml}</td></tr>
+                <tr><th>支払い完了日</th><td>${escapeHtml(item.paid_at || '')}</td></tr>
+                <tr><th>支払い方法</th><td>${escapeHtml(item.paid_method || '')}</td></tr>
+                <tr><th>社内対応</th><td>${renderInternalContactControls(item)}<div class="note" style="margin-top:8px;">${escapeHtml(renderInternalContactSummary(item))}</div></td></tr>
+                <tr><th>メール送信日時</th><td>${escapeHtml(formatDateTime(item.email_marked_at || ''))}</td></tr>
+                <tr><th>メモ</th><td>${escapeHtml(item.memo || '')}</td></tr>
+                <tr><th>更新日時</th><td>${escapeHtml(formatDateTime(item.updated_at))}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>対応履歴</h3>
+          <div class="log-list">
+            ${logs.length > 0 ? logs.map(log => `<div class="log-item"><strong>${escapeHtml(formatDateTime(log.created_at))} / ${escapeHtml(log.action_type)}</strong><div>${escapeHtml(log.action_detail || '')}</div></div>`).join('') : '<div class="log-item">履歴はありません。</div>'}
+          </div>
+        </div>
+        <div class="actions"><button class="btn-danger" onclick="deletePayment('${item.id}')">このデータを削除</button></div>
+      `;
       els.detailModal.classList.add('active');
     }
 
