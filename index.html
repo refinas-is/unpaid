@@ -1877,8 +1877,10 @@
             ]);
           }
 
+          const firstErrorMessage = failedResults[0]?.message || '';
           alert(
             `メール送信結果：成功 ${successCount} 件 / エラー ${failedResults.length} 件\n\n` +
+            (firstErrorMessage ? `エラー内容：${firstErrorMessage}\n\n` : '') +
             'エラーしたメールアドレスだけをCSVで出力しました。'
           );
         } else {
