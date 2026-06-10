@@ -413,6 +413,53 @@
           <div class="actions"><button class="btn-primary" id="importBtn">この内容で取り込む</button><button class="btn-secondary" id="downloadErrorBtn">エラー行CSVを出力</button></div>
           <div class="table-wrap" style="margin-top:14px;"><table><thead><tr><th>判定</th><th>エラー内容</th><th>対象月</th><th>店舗開始番号</th><th>店舗名</th><th>生徒番号</th><th>生徒名</th><th>電話番号</th><th>金額</th><th>振替結果</th></tr></thead><tbody id="previewBody"></tbody></table></div>
         </div>
+
+        <div class="card">
+          <h2>メールアドレスCSV送信</h2>
+          <p class="note">
+            会員番号とメールアドレスだけのCSVをアップロードして、失敗者データの名前と照合して送信リストをプレビューします。<br>
+            送信成功後は、一覧の社内対応「メール」に自動でチェックが入ります。送信エラーがあった場合は、エラーしたメールアドレスだけCSVで自動出力します。
+          </p>
+
+          <div class="form-block">
+            <div class="grid grid-1">
+              <div><label for="emailCsvFile">メールアドレスCSVファイル</label><input type="file" id="emailCsvFile" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" /></div>
+            </div>
+            <div class="actions">
+              <button class="btn-blue" id="emailPreviewBtn">送信リストをプレビュー</button>
+              <button class="btn-primary" id="emailSendBtn" disabled style="opacity:0.5;cursor:not-allowed;">プレビュー対象にメール送信</button>
+              <button class="btn-secondary" id="emailClearBtn">メールCSVクリア</button>
+            </div>
+          </div>
+
+          <p class="note">
+            対応ヘッダー：<strong>会員番号</strong> または <strong>生徒番号</strong>、<strong>メールアドレス</strong> または <strong>メール</strong>
+          </p>
+        </div>
+
+        <div class="card hidden" id="emailPreviewCard">
+          <h2>送信リストプレビュー</h2>
+          <p id="emailPreviewSummary" class="note"></p>
+          <div class="table-wrap" style="margin-top:14px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>判定</th>
+                  <th>エラー内容</th>
+                  <th>対象月</th>
+                  <th>店舗</th>
+                  <th>会員番号</th>
+                  <th>名前</th>
+                  <th>メールアドレス</th>
+                  <th>振替結果</th>
+                  <th>対応ステータス</th>
+                  <th>社内対応</th>
+                </tr>
+              </thead>
+              <tbody id="emailPreviewBody"></tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <section id="list" class="section">
@@ -487,6 +534,7 @@
     let payments = [];
     let storeRanges = [];
     let previewRows = [];
+    let emailSendRows = [];
     let currentFilteredRows = [];
     let dashboardFilteredRows = [];
 
@@ -532,6 +580,14 @@
       previewBody: document.getElementById('previewBody'),
       importBtn: document.getElementById('importBtn'),
       downloadErrorBtn: document.getElementById('downloadErrorBtn'),
+
+      emailCsvFile: document.getElementById('emailCsvFile'),
+      emailPreviewBtn: document.getElementById('emailPreviewBtn'),
+      emailSendBtn: document.getElementById('emailSendBtn'),
+      emailClearBtn: document.getElementById('emailClearBtn'),
+      emailPreviewCard: document.getElementById('emailPreviewCard'),
+      emailPreviewSummary: document.getElementById('emailPreviewSummary'),
+      emailPreviewBody: document.getElementById('emailPreviewBody'),
       filterMonth: document.getElementById('filterMonth'),
       filterStore: document.getElementById('filterStore'),
       filterReason: document.getElementById('filterReason'),
@@ -709,6 +765,9 @@
       els.clearPreviewBtn.addEventListener('click', clearPreview);
       els.importBtn.addEventListener('click', importPreviewRows);
       els.downloadErrorBtn.addEventListener('click', downloadErrorRows);
+      els.emailPreviewBtn.addEventListener('click', handleEmailPreview);
+      els.emailSendBtn.addEventListener('click', sendPreviewEmails);
+      els.emailClearBtn.addEventListener('click', clearEmailPreview);
       els.applyFilterBtn.addEventListener('click', applyFilters);
       els.resetFilterBtn.addEventListener('click', resetFilters);
       els.exportCsvBtn.addEventListener('click', exportFilteredCsv);
@@ -1204,6 +1263,374 @@
       if (errorRows.length === 0) { alert('エラー行はありません。'); return; }
       const rows = [['行番号', 'エラー内容', '対象月', '店舗開始番号', '店舗名', '生徒番号', '生徒名', '振替結果'], ...errorRows.map(row => [row.row_number, row.errors.join(' / '), row.target_month, row.store_start_number, row.store_name, row.student_number, row.student_name, row.failure_reason])];
       downloadCsv('error_rows.csv', rows);
+    }
+
+
+    function mapEmailCsvRows(rows) {
+      if (rows.length === 0) return [];
+
+      let headerRowIndex = -1;
+
+      for (let i = 0; i < Math.min(rows.length, 30); i++) {
+        if (!isNotEmptyCsvRow(rows[i])) continue;
+
+        const studentIndex = findHeaderIndex(rows[i], ['会員番号', '生徒番号', '会員No', '会員NO', 'member_id', 'student_number']);
+        const emailIndex = findHeaderIndex(rows[i], ['メールアドレス', 'メール', 'email', 'Email', 'mail']);
+
+        if (studentIndex >= 0 && emailIndex >= 0) {
+          headerRowIndex = i;
+          break;
+        }
+      }
+
+      if (headerRowIndex === -1) {
+        alert(
+          'メールCSVのヘッダー行を取得できませんでした。\n\n' +
+          '必要なヘッダー：会員番号（または生徒番号）、メールアドレス'
+        );
+        return [];
+      }
+
+      const headers = rows[headerRowIndex].map(h => normalizeText(h));
+      const studentCol = findHeaderIndex(headers, ['会員番号', '生徒番号', '会員No', '会員NO', 'member_id', 'student_number']);
+      const emailCol = findHeaderIndex(headers, ['メールアドレス', 'メール', 'email', 'Email', 'mail']);
+
+      const bodyRows = rows
+        .slice(headerRowIndex + 1)
+        .filter(row => isNotEmptyCsvRow(row));
+
+      const resultRows = [];
+      const seenPaymentIds = new Set();
+
+      bodyRows.forEach((row, index) => {
+        const studentNumber = normalizeText(row[studentCol]);
+        const email = normalizeText(row[emailCol]);
+        const baseErrors = [];
+
+        if (!studentNumber) baseErrors.push('会員番号が空です');
+        if (!email) baseErrors.push('メールアドレスが空です');
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) baseErrors.push('メールアドレスの形式が不正です');
+
+        if (baseErrors.length > 0) {
+          resultRows.push({
+            row_number: headerRowIndex + index + 2,
+            is_valid: false,
+            errors: baseErrors,
+            failed_payment_id: '',
+            target_month: '',
+            store_name: '',
+            student_number: studentNumber,
+            student_name: '',
+            customer_email: email,
+            failure_reason: '',
+            handling_status: '',
+            internal_status: ''
+          });
+          return;
+        }
+
+        const matches = payments.filter(item =>
+          String(item.student_number || '').trim() === studentNumber
+        );
+
+        if (matches.length === 0) {
+          resultRows.push({
+            row_number: headerRowIndex + index + 2,
+            is_valid: false,
+            errors: ['失敗者データに一致する会員番号がありません'],
+            failed_payment_id: '',
+            target_month: '',
+            store_name: '',
+            student_number: studentNumber,
+            student_name: '',
+            customer_email: email,
+            failure_reason: '',
+            handling_status: '',
+            internal_status: ''
+          });
+          return;
+        }
+
+        const unpaidMatches = matches.filter(payment => !PAID_STATUSES.includes(payment.handling_status));
+
+        if (unpaidMatches.length === 0) {
+          resultRows.push({
+            row_number: headerRowIndex + index + 2,
+            is_valid: false,
+            errors: ['店舗支払い済み、または口座振り込み済みのため送信対象外です'],
+            failed_payment_id: '',
+            target_month: '',
+            store_name: '',
+            student_number: studentNumber,
+            student_name: matches[0]?.student_name || '',
+            customer_email: email,
+            failure_reason: '',
+            handling_status: '',
+            internal_status: ''
+          });
+          return;
+        }
+
+        const sendableMatches = unpaidMatches.filter(payment => !payment.email_sent);
+
+        if (sendableMatches.length === 0) {
+          resultRows.push({
+            row_number: headerRowIndex + index + 2,
+            is_valid: false,
+            errors: ['メール送信済み（同月）のため送信対象外です'],
+            failed_payment_id: '',
+            target_month: unpaidMatches.map(payment => payment.target_month).join(' / '),
+            store_name: unpaidMatches.map(payment => payment.store_name).filter(Boolean).join(' / '),
+            student_number: studentNumber,
+            student_name: unpaidMatches[0]?.student_name || '',
+            customer_email: email,
+            failure_reason: unpaidMatches.map(payment => payment.failure_reason).join(' / '),
+            handling_status: unpaidMatches.map(payment => payment.handling_status).join(' / '),
+            internal_status: unpaidMatches.map(payment => renderInternalContactSummary(payment)).join(' / ')
+          });
+          return;
+        }
+
+        sendableMatches.forEach(payment => {
+          if (seenPaymentIds.has(payment.id)) {
+            resultRows.push({
+              row_number: headerRowIndex + index + 2,
+              is_valid: false,
+              errors: ['同じ会員番号がCSV内で重複しています'],
+              failed_payment_id: payment.id,
+              target_month: payment.target_month,
+              store_name: payment.store_name,
+              student_number: studentNumber,
+              student_name: payment.student_name,
+              customer_email: email,
+              failure_reason: payment.failure_reason,
+              handling_status: payment.handling_status,
+              internal_status: renderInternalContactSummary(payment)
+            });
+            return;
+          }
+
+          seenPaymentIds.add(payment.id);
+
+          resultRows.push({
+            row_number: headerRowIndex + index + 2,
+            is_valid: true,
+            errors: [],
+            failed_payment_id: payment.id,
+            target_month: payment.target_month,
+            store_name: payment.store_name,
+            student_number: studentNumber,
+            student_name: payment.student_name,
+            customer_email: email,
+            failure_reason: payment.failure_reason,
+            handling_status: payment.handling_status,
+            internal_status: renderInternalContactSummary(payment)
+          });
+        });
+      });
+
+      return resultRows;
+    }
+
+    async function handleEmailPreview() {
+      if (!supabaseClient) {
+        alert('Supabase設定をしてください。');
+        return;
+      }
+
+      const file = els.emailCsvFile.files[0];
+
+      if (!file) {
+        alert('メールCSVファイルを選択してください。');
+        return;
+      }
+
+      const fileName = String(file.name || '').toLowerCase();
+      const allowedFile = fileName.endsWith('.csv') || fileName.endsWith('.tsv') || fileName.endsWith('.txt');
+
+      if (!allowedFile) {
+        alert(
+          'このファイル形式は取り込めません。\n\n' +
+          '選択されたファイル：' + file.name + '\n\n' +
+          'CSV、TSV、TXTのいずれかでアップロードしてください。'
+        );
+        return;
+      }
+
+      await loadPayments();
+
+      const text = await readCsvTextFile(file);
+      const rows = parseCsv(text);
+
+      emailSendRows = mapEmailCsvRows(rows);
+
+      renderEmailPreview();
+    }
+
+    function renderEmailPreview() {
+      els.emailPreviewCard.classList.remove('hidden');
+      els.emailPreviewBody.innerHTML = '';
+
+      const total = emailSendRows.length;
+      const ok = emailSendRows.filter(row => row.is_valid).length;
+      const ng = total - ok;
+
+      els.emailPreviewSummary.textContent = `全 ${total} 件 / 送信可能 ${ok} 件 / エラー ${ng} 件`;
+
+      emailSendRows.forEach(row => {
+        const tr = document.createElement('tr');
+
+        tr.innerHTML = `
+          <td>${row.is_valid ? '<span class="success-text">OK</span>' : '<span class="error-text">エラー</span>'}</td>
+          <td>${escapeHtml(row.errors.join(' / '))}</td>
+          <td>${escapeHtml(row.target_month)}</td>
+          <td>${escapeHtml(row.store_name || '')}</td>
+          <td>${escapeHtml(row.student_number)}</td>
+          <td>${escapeHtml(row.student_name || '')}</td>
+          <td>${escapeHtml(row.customer_email || '')}</td>
+          <td>${escapeHtml(row.failure_reason || '')}</td>
+          <td>${escapeHtml(row.handling_status || '')}</td>
+          <td>${escapeHtml(row.internal_status || '')}</td>
+        `;
+
+        els.emailPreviewBody.appendChild(tr);
+      });
+
+      els.emailSendBtn.disabled = ok === 0 || ng > 0;
+      els.emailSendBtn.style.opacity = els.emailSendBtn.disabled ? '0.5' : '1';
+      els.emailSendBtn.style.cursor = els.emailSendBtn.disabled ? 'not-allowed' : 'pointer';
+    }
+
+    function clearEmailPreview() {
+      emailSendRows = [];
+      els.emailCsvFile.value = '';
+      els.emailPreviewSummary.textContent = '';
+      els.emailPreviewBody.innerHTML = '';
+      els.emailPreviewCard.classList.add('hidden');
+      els.emailSendBtn.disabled = true;
+      els.emailSendBtn.style.opacity = '0.5';
+      els.emailSendBtn.style.cursor = 'not-allowed';
+    }
+
+    async function sendPreviewEmails() {
+      if (!supabaseClient) {
+        alert('Supabase設定をしてください。');
+        return;
+      }
+
+      const validRows = emailSendRows.filter(row => row.is_valid);
+
+      if (validRows.length === 0) {
+        alert('送信できる対象者がありません。');
+        return;
+      }
+
+      const confirmText = `メールを ${validRows.length} 件送信します。\n\n送信後は取り消せません。\n実行してよろしいですか？`;
+
+      if (!confirm(confirmText)) return;
+
+      els.emailSendBtn.disabled = true;
+      els.emailSendBtn.textContent = '送信中...';
+      els.emailSendBtn.style.opacity = '0.5';
+      els.emailSendBtn.style.cursor = 'wait';
+
+      try {
+        const updateErrors = [];
+
+        for (const row of validRows) {
+          const { error } = await supabaseClient
+            .from('failed_payments')
+            .update({
+              customer_email: row.customer_email,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', row.failed_payment_id);
+
+          if (error) {
+            updateErrors.push(row.customer_email);
+          }
+        }
+
+        if (updateErrors.length > 0) {
+          downloadCsv('email_send_errors.csv', [
+            ['メールアドレス'],
+            ...updateErrors.map(email => [email])
+          ]);
+          alert('メールアドレス更新でエラーが発生しました。エラーしたメールアドレスだけCSVで出力しました。');
+          return;
+        }
+
+        const ids = validRows.map(row => row.failed_payment_id);
+
+        const { data, error } = await supabaseClient.functions.invoke('send-payment-reminder', {
+          body: { ids }
+        });
+
+        if (error) {
+          downloadCsv('email_send_errors.csv', [
+            ['メールアドレス'],
+            ...validRows.map(row => [row.customer_email])
+          ]);
+          alert('メール送信に失敗しました。送信対象のメールアドレスをCSVで出力しました。');
+          return;
+        }
+
+        if (!data) {
+          downloadCsv('email_send_errors.csv', [
+            ['メールアドレス'],
+            ...validRows.map(row => [row.customer_email])
+          ]);
+          alert('メール送信に失敗しました。送信対象のメールアドレスをCSVで出力しました。');
+          return;
+        }
+
+        const results = Array.isArray(data.results) ? data.results : [];
+        const successCount = Number(data.success_count || 0);
+        const failedResults = results.filter(result => !result.success);
+
+        if (failedResults.length > 0) {
+          const failedEmails = failedResults
+            .map(result => {
+              const source = emailSendRows.find(row => row.failed_payment_id === result.id);
+              return source ? source.customer_email : '';
+            })
+            .filter(email => email);
+
+          if (failedEmails.length > 0) {
+            downloadCsv('email_send_errors.csv', [
+              ['メールアドレス'],
+              ...failedEmails.map(email => [email])
+            ]);
+          }
+
+          alert(
+            `メール送信結果：成功 ${successCount} 件 / エラー ${failedResults.length} 件\n\n` +
+            'エラーしたメールアドレスだけをCSVで出力しました。'
+          );
+        } else {
+          alert(`メール送信完了：${successCount || ids.length} 件`);
+        }
+
+        clearEmailPreview();
+
+        await loadPayments();
+        populateFilters();
+        populateDashboardFilters();
+        applyDashboardFilters();
+        renderDashboard();
+        applyFilters();
+      } catch (error) {
+        downloadCsv('email_send_errors.csv', [
+          ['メールアドレス'],
+          ...validRows.map(row => [row.customer_email])
+        ]);
+        alert('メール送信に失敗しました。送信対象のメールアドレスをCSVで出力しました。');
+      } finally {
+        els.emailSendBtn.textContent = 'プレビュー対象にメール送信';
+        els.emailSendBtn.disabled = true;
+        els.emailSendBtn.style.opacity = '0.5';
+        els.emailSendBtn.style.cursor = 'not-allowed';
+      }
     }
 
     function populateFilters() {
