@@ -364,7 +364,7 @@
           <div class="form-block">
             <div class="grid grid-2">
               <div><label for="targetMonth">対象月</label><input type="month" id="targetMonth" /></div>
-              <div><label for="csvFile">CSVファイル</label><input type="file" id="csvFile" accept=".csv,text/csv" /></div>
+              <div><label for="csvFile">CSVファイル</label><input type="file" id="csvFile" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" /></div>
             </div>
             <div class="actions"><button class="btn-primary" id="previewBtn">プレビュー</button><button class="btn-secondary" id="clearPreviewBtn">プレビュー削除</button></div>
           </div>
@@ -853,8 +853,10 @@
     function normalizeHeaderName(value) {
       return normalizeText(value)
         .replace(/^\uFEFF/, '')
+        .normalize('NFKC')
         .replace(/[ 　\t\r\n]/g, '')
-        .replace(/[（）]/g, match => match === '（' ? '(' : ')');
+        .replace(/[（）]/g, match => match === '（' ? '(' : ')')
+        .replace(/[［］\[\]「」『』"'`]/g, '');
     }
 
     function isNotEmptyCsvRow(row) {
@@ -864,33 +866,45 @@
     function findHeaderIndex(headers, names) {
       const normalizedHeaders = headers.map(header => normalizeHeaderName(header));
       const normalizedNames = names.map(name => normalizeHeaderName(name));
-      return normalizedHeaders.findIndex(header => normalizedNames.includes(header));
+
+      return normalizedHeaders.findIndex(header => {
+        return normalizedNames.some(name => header === name);
+      });
     }
 
-    function findHeaderRowByFixedFormat(rows) {
-      const nonEmptyRowIndexes = [];
+    function rowHasRequiredHeaders(row) {
+      const headers = row.map(cell => normalizeHeaderName(cell));
 
-      for (let i = 0; i < rows.length; i++) {
-        if (isNotEmptyCsvRow(rows[i])) {
-          nonEmptyRowIndexes.push(i);
-        }
-      }
+      return (
+        headers.includes(normalizeHeaderName('生徒番号')) &&
+        headers.includes(normalizeHeaderName('生徒名')) &&
+        headers.includes(normalizeHeaderName('振替結果'))
+      );
+    }
 
-      if (nonEmptyRowIndexes.length === 0) {
-        return -1;
-      }
-
+    function findHeaderRowByExactHeaders(rows) {
       /*
         固定仕様：
-        1つ目の空ではない行 = タイトル行
-        2つ目の空ではない行 = ヘッダー行
+        ヘッダー行は「生徒番号」「生徒名」「振替結果」をすべて含む行。
 
-        例：
-        口座振替結果チェックリスト_20260610
-        No,生徒番号,生徒名,ふりがな,電話番号,口座名義,金額,...
+        位置で決め打ちしない理由：
+        Numbers / Excel のCSV書き出しでは、
+        ・タイトル行が出る場合
+        ・タイトル行が出ない場合
+        ・上に空行が入る場合
+        があるため。
+
+        ただし、不安定な全件探索ではなく、先頭30行までの非空行だけを確認する。
+        個人情報のデータ行がヘッダー扱いされないよう、必須ヘッダー3つの完全一致だけを条件にする。
       */
-      if (nonEmptyRowIndexes.length >= 2) {
-        return nonEmptyRowIndexes[1];
+      const maxRowsToCheck = Math.min(rows.length, 30);
+
+      for (let i = 0; i < maxRowsToCheck; i++) {
+        if (!isNotEmptyCsvRow(rows[i])) continue;
+
+        if (rowHasRequiredHeaders(rows[i])) {
+          return i;
+        }
       }
 
       return -1;
@@ -899,12 +913,13 @@
     function mapCsvRows(rows, targetMonth) {
       if (rows.length === 0) return [];
 
-      const headerRowIndex = findHeaderRowByFixedFormat(rows);
+      const headerRowIndex = findHeaderRowByExactHeaders(rows);
 
       if (headerRowIndex === -1) {
         alert(
           'CSVのヘッダー行を取得できませんでした。\n\n' +
-          'このツールは「1行目：タイトル」「2行目：ヘッダー」のCSVを前提にしています。'
+          '必須ヘッダー：生徒番号、生徒名、振替結果\n\n' +
+          'この3つの列名が、CSVの先頭30行以内にそのまま存在する必要があります。'
         );
         return [];
       }
@@ -935,11 +950,14 @@
         .map(item => item[0]);
 
       if (missingHeaders.length > 0) {
+        alert('CSVの必須ヘッダーが不足しています：' + missingHeaders.join('、'));
+        return [];
+      }
+
+      if (bodyRows.length === 0) {
         alert(
-          'CSVの必須ヘッダーが不足しています：' + missingHeaders.join('、') + '\n\n' +
-          'このツールは「タイトル行の次の行」をヘッダーとして読み込んでいます。\n' +
-          'CSV UTF-8 / Shift-JIS / タブ区切りに対応しています。\n' +
-          'Excelファイル（.xlsx）のままではなく、CSVまたはテキスト形式で保存してください。'
+          'ヘッダー行は取得できましたが、取り込むデータ行がありません。\n\n' +
+          'データを入れたCSVで再度取り込みしてください。'
         );
         return [];
       }
@@ -1021,6 +1039,20 @@
       const file = els.csvFile.files[0];
       if (!targetMonth) { alert('対象月を選択してください。'); return; }
       if (!file) { alert('CSVファイルを選択してください。'); return; }
+
+      const fileName = String(file.name || '').toLowerCase();
+      const allowedFile = fileName.endsWith('.csv') || fileName.endsWith('.tsv') || fileName.endsWith('.txt');
+
+      if (!allowedFile) {
+        alert(
+          'このファイル形式は取り込めません。\n\n' +
+          '選択されたファイル：' + file.name + '\n\n' +
+          'Numbersファイル（.numbers）やExcelファイル（.xlsx）は、そのままでは読み込めません。\n' +
+          'NumbersまたはExcelから「CSV」または「タブ区切りテキスト」として書き出してから取り込んでください。'
+        );
+        return;
+      }
+
       if (storeRanges.length === 0) { alert('先に店舗範囲マスタを登録してください。'); return; }
       const text = await readCsvTextFile(file);
       const rows = parseCsv(text);
