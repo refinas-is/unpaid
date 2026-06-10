@@ -773,22 +773,80 @@
       return '';
     }
 
+    function detectCsvDelimiter(text) {
+      const lines = String(text || '')
+        .replace(/^\uFEFF/, '')
+        .split(/\r\n|\n|\r/)
+        .map(line => line.trim())
+        .filter(line => line !== '')
+        .slice(0, 10);
+
+      const delimiters = [',', '\t', ';'];
+      let bestDelimiter = ',';
+      let bestScore = -1;
+
+      delimiters.forEach(delimiter => {
+        let score = 0;
+
+        lines.forEach(line => {
+          const count = line.split(delimiter).length - 1;
+          if (count > 0) score += count;
+        });
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestDelimiter = delimiter;
+        }
+      });
+
+      return bestDelimiter;
+    }
+
     function parseCsv(text) {
+      const delimiter = detectCsvDelimiter(text);
       const rows = [];
       let current = [];
       let field = '';
       let inQuotes = false;
+
+      text = String(text || '').replace(/^\uFEFF/, '');
+
       for (let i = 0; i < text.length; i++) {
         const char = text[i];
         const next = text[i + 1];
-        if (char === '"' && inQuotes && next === '"') { field += '"'; i++; continue; }
-        if (char === '"') { inQuotes = !inQuotes; continue; }
-        if (char === ',' && !inQuotes) { current.push(field); field = ''; continue; }
-        if ((char === '\n' || char === '\r') && !inQuotes) { if (char === '\r' && next === '\n') i++; current.push(field); rows.push(current); current = []; field = ''; continue; }
+
+        if (char === '"' && inQuotes && next === '"') {
+          field += '"';
+          i++;
+          continue;
+        }
+
+        if (char === '"') {
+          inQuotes = !inQuotes;
+          continue;
+        }
+
+        if (char === delimiter && !inQuotes) {
+          current.push(field);
+          field = '';
+          continue;
+        }
+
+        if ((char === '\n' || char === '\r') && !inQuotes) {
+          if (char === '\r' && next === '\n') i++;
+          current.push(field);
+          rows.push(current);
+          current = [];
+          field = '';
+          continue;
+        }
+
         field += char;
       }
+
       current.push(field);
       rows.push(current);
+
       return rows.filter(row => row.some(cell => normalizeText(cell) !== ''));
     }
 
