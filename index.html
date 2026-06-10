@@ -792,36 +792,114 @@
       return rows.filter(row => row.some(cell => normalizeText(cell) !== ''));
     }
 
+    function normalizeHeaderName(value) {
+      return normalizeText(value)
+        .replace(/^\uFEFF/, '')
+        .replace(/[ 　\t\r\n]/g, '')
+        .replace(/[（）]/g, match => match === '（' ? '(' : ')');
+    }
+
+    function isNotEmptyCsvRow(row) {
+      return row.some(cell => normalizeText(cell) !== '');
+    }
+
+    function findHeaderIndex(headers, names) {
+      const normalizedHeaders = headers.map(header => normalizeHeaderName(header));
+      const normalizedNames = names.map(name => normalizeHeaderName(name));
+      return normalizedHeaders.findIndex(header => normalizedNames.includes(header));
+    }
+
+    function findHeaderRowByFixedFormat(rows) {
+      const nonEmptyRowIndexes = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        if (isNotEmptyCsvRow(rows[i])) {
+          nonEmptyRowIndexes.push(i);
+        }
+      }
+
+      if (nonEmptyRowIndexes.length === 0) {
+        return -1;
+      }
+
+      /*
+        固定仕様：
+        1つ目の空ではない行 = タイトル行
+        2つ目の空ではない行 = ヘッダー行
+
+        例：
+        口座振替結果チェックリスト_20260610
+        No,生徒番号,生徒名,ふりがな,電話番号,口座名義,金額,...
+      */
+      if (nonEmptyRowIndexes.length >= 2) {
+        return nonEmptyRowIndexes[1];
+      }
+
+      return -1;
+    }
+
     function mapCsvRows(rows, targetMonth) {
       if (rows.length === 0) return [];
-      const headers = rows[0].map(h => normalizeText(h));
-      const bodyRows = rows.slice(1);
+
+      const headerRowIndex = findHeaderRowByFixedFormat(rows);
+
+      if (headerRowIndex === -1) {
+        alert(
+          'CSVのヘッダー行を取得できませんでした。\n\n' +
+          'このツールは「1行目：タイトル」「2行目：ヘッダー」のCSVを前提にしています。'
+        );
+        return [];
+      }
+
+      const headers = rows[headerRowIndex].map(h => normalizeText(h));
+      const bodyRows = rows
+        .slice(headerRowIndex + 1)
+        .filter(row => isNotEmptyCsvRow(row));
+
       const col = {
-        student_number: headers.indexOf('生徒番号'),
-        student_name: headers.indexOf('生徒名'),
-        student_kana: headers.indexOf('ふりがな'),
-        phone: headers.indexOf('電話番号'),
-        account_holder: headers.indexOf('口座名義'),
-        amount: headers.indexOf('金額'),
-        failure_reason: headers.indexOf('振替結果')
+        student_number: findHeaderIndex(headers, ['生徒番号']),
+        student_name: findHeaderIndex(headers, ['生徒名']),
+        student_kana: findHeaderIndex(headers, ['ふりがな', 'フリガナ']),
+        phone: findHeaderIndex(headers, ['電話番号', '電話']),
+        account_holder: findHeaderIndex(headers, ['口座名義']),
+        amount: findHeaderIndex(headers, ['金額']),
+        failure_reason: findHeaderIndex(headers, ['振替結果'])
       };
-      const requiredHeaders = [['生徒番号', col.student_number], ['生徒名', col.student_name], ['振替結果', col.failure_reason]];
-      const missingHeaders = requiredHeaders.filter(item => item[1] === -1).map(item => item[0]);
-      if (missingHeaders.length > 0) { alert('CSVの必須ヘッダーが不足しています：' + missingHeaders.join('、')); return []; }
+
+      const requiredHeaders = [
+        ['生徒番号', col.student_number],
+        ['生徒名', col.student_name],
+        ['振替結果', col.failure_reason]
+      ];
+
+      const missingHeaders = requiredHeaders
+        .filter(item => item[1] === -1)
+        .map(item => item[0]);
+
+      if (missingHeaders.length > 0) {
+        alert(
+          'CSVの必須ヘッダーが不足しています：' + missingHeaders.join('、') + '\n\n' +
+          'このツールは「タイトル行の次の行」をヘッダーとして読み込んでいます。'
+        );
+        return [];
+      }
+
       return bodyRows.map((row, index) => {
         const studentNumber = normalizeText(row[col.student_number]);
         const studentName = normalizeText(row[col.student_name]);
         const failureReason = normalizeText(row[col.failure_reason]);
         const storeResult = getStoreByStudentNumber(studentNumber);
         const errors = [];
+
         if (!targetMonth) errors.push('対象月が未選択です');
         if (!studentNumber) errors.push('生徒番号が空です');
         if (!studentName) errors.push('生徒名が空です');
         if (storeResult.error) errors.push(storeResult.error);
         if (!failureReason) errors.push('振替結果が空です');
         if (failureReason && !FAILURE_REASONS.includes(failureReason)) errors.push(`振替結果「${failureReason}」は許可されていません`);
+
         return {
-          row_number: index + 2,
+          row_number: headerRowIndex + index + 2,
           is_valid: errors.length === 0,
           errors,
           target_month: targetMonth,
@@ -829,10 +907,10 @@
           store_name: storeResult.store_name,
           student_number: studentNumber,
           student_name: studentName,
-          student_kana: normalizeText(row[col.student_kana]),
-          phone: normalizeText(row[col.phone]),
-          account_holder: normalizeText(row[col.account_holder]),
-          amount: normalizeAmount(row[col.amount]),
+          student_kana: col.student_kana >= 0 ? normalizeText(row[col.student_kana]) : '',
+          phone: col.phone >= 0 ? normalizeText(row[col.phone]) : '',
+          account_holder: col.account_holder >= 0 ? normalizeText(row[col.account_holder]) : '',
+          amount: col.amount >= 0 ? normalizeAmount(row[col.amount]) : null,
           failure_reason: failureReason,
           handling_status: '未対応',
           payment_due_date: null,
