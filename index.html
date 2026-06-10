@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>口座振替失敗者 管理ツール</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #f7f1eb;
+      --card: #ffffff;
+      --text: #4a3b33;
+      --muted: #8b7669;
+      --line: #e7d8cb;
+      --main-red: #D8212C;
+      --main-red-dark: #b61a24;
+      --main-blue: #0F6EB8;
+      --main-blue-dark: #0b5a95;
+      --soft-red: #fdebed;
+      --soft-blue: #e9f3fb;
+      --soft-green: #e8f8ef;
+      --soft-orange: #fff3e6;
+      --success: #138a4f;
+      --shadow: 0 10px 24px rgba(74, 59, 51, 0.08);
+      --radius-xl: 18px;
+      --radius-md: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    }
+
+    body { min-height: 100vh; }
+
+    .topbar {
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .brand-wrap { display: flex; align-items: center; gap: 16px; }
+    .brand { font-size: 42px; line-height: 1; font-weight: 900; letter-spacing: 0.02em; color: var(--main-red); }
+    .brand-sub { font-size: 13px; color: var(--muted); font-weight: 800; }
+    .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+    .pill-btn, button {
+      border: none;
+      cursor: pointer;
+      font-weight: 900;
+      border-radius: 16px;
+      padding: 14px 18px;
+      font-size: 14px;
+    }
+
+    .pill-btn { background: var(--main-red); color: #fff; border-radius: 14px; padding: 12px 18px; }
+    .pill-btn:hover { background: var(--main-red-dark); }
+    .pill-btn.secondary { background: #fff; color: var(--main-blue); border: 1px solid #d9e7f3; }
+    .pill-btn.secondary:hover { background: var(--soft-blue); }
+
+    .shell { max-width: 1580px; margin: 0 auto; padding: 26px 22px 40px; }
+
+    .tab-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .tab-card {
+      border: none;
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      background: #d5ceca;
+      color: #5c4d45;
+      padding: 22px 20px;
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 17px;
+      font-weight: 900;
+      cursor: pointer;
+      justify-content: center;
+      box-shadow: var(--shadow);
+    }
+    .tab-card.active { background: var(--main-red); color: #fff; }
+    .tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; font-size: 18px; }
+
+    .panel { background: var(--card); border-radius: 0 0 var(--radius-xl) var(--radius-xl); box-shadow: var(--shadow); border: 1px solid rgba(0, 0, 0, 0.03); padding: 26px; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-xl); padding: 22px; margin-bottom: 18px; box-shadow: 0 6px 18px rgba(74, 59, 51, 0.04); }
+    .card h2 { margin: 0 0 14px; font-size: 22px; color: #4a3b33; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .note { font-size: 13px; line-height: 1.8; color: var(--muted); }
+    .danger-note { background: #fff1f2; border: 1px solid #fecdd3; color: #9f1239; padding: 12px 14px; border-radius: var(--radius-md); font-size: 13px; line-height: 1.8; font-weight: 800; }
+
+    .grid { display: grid; gap: 14px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .summary-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .summary-box { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-xl); padding: 18px; box-shadow: 0 6px 18px rgba(74, 59, 51, 0.05); }
+    .summary-box .label { font-size: 13px; color: var(--muted); font-weight: 900; }
+    .summary-box .value { margin-top: 8px; font-size: 34px; font-weight: 900; line-height: 1; }
+    .summary-box.red .value { color: var(--main-red); }
+    .summary-box.blue .value { color: var(--main-blue); }
+    .summary-box.green .value { color: var(--success); }
+    .summary-box.orange .value { color: #c96a0c; }
+
+    label { display: block; margin-bottom: 8px; font-size: 12px; color: var(--muted); font-weight: 900; }
+    input, select, textarea { width: 100%; border: 2px solid #e0c9b6; background: #fff; border-radius: 16px; padding: 16px 18px; font-size: 15px; color: var(--text); outline: none; transition: 0.15s ease; }
+    input:focus, select:focus, textarea:focus { border-color: var(--main-blue); box-shadow: 0 0 0 3px rgba(15, 110, 184, 0.08); }
+    textarea { min-height: 130px; resize: vertical; }
+    .form-block { background: #fafafa; border: 1px solid #f0e5dc; border-radius: 18px; padding: 18px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+
+    .btn-primary { background: var(--main-red); color: #fff; }
+    .btn-primary:hover { background: var(--main-red-dark); }
+    .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--line); }
+    .btn-secondary:hover { background: #faf6f2; }
+    .btn-blue { background: var(--main-blue); color: #fff; }
+    .btn-blue:hover { background: var(--main-blue-dark); }
+    .btn-danger { background: var(--main-red); color: #fff; }
+    .btn-small { padding: 8px 12px; font-size: 12px; border-radius: 10px; }
+    .hidden { display: none !important; }
+
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 18px; background: #fff; max-height: 680px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { font-size: 13px; padding: 12px 12px; border-bottom: 1px solid #f1e6dc; white-space: nowrap; vertical-align: middle; text-align: left; }
+    th { background: #fcf8f5; color: #654f42; font-weight: 900; position: sticky; top: 0; z-index: 1; }
+
+    .badge { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 900; line-height: 1; }
+    .badge-red { background: #fde8ea; color: var(--main-red); }
+    .badge-gray { background: #efefef; color: #666; }
+    .badge-orange { background: #fff0df; color: #b66311; }
+    .badge-blue { background: #e7f2fb; color: var(--main-blue); }
+    .badge-green { background: #e7f7ee; color: #0e8a4d; }
+    .status-cell { min-width: 260px; }
+    .status-chip-wrap { margin-top: 8px; }
+    .due-wrap { min-width: 200px; }
+    .delay-alert { margin-left: 8px; color: var(--main-red); font-size: 12px; font-weight: 900; }
+    .row-paid-store { background: #f0fbf5; }
+    .row-paid-transfer { background: #eef7fe; }
+    .row-ignore { background: #f7f7f7; color: #7a7a7a; }
+    .success-text { color: var(--success); font-weight: 900; }
+    .error-text { color: var(--main-red); font-weight: 900; }
+
+    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(30, 20, 12, 0.45); z-index: 50; padding: 20px; overflow: auto; }
+    .modal-bg.active { display: block; }
+    .modal { background: #fff; max-width: 980px; margin: 40px auto; border-radius: 22px; padding: 22px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .modal-header h2 { margin: 0; font-size: 22px; }
+    .log-list { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #fff; }
+    .log-item { padding: 12px 14px; border-bottom: 1px solid #f2e7dc; font-size: 13px; line-height: 1.7; }
+    .log-item:last-child { border-bottom: none; }
+    .log-item strong { display: block; margin-bottom: 2px; }
+    .placeholder-box { padding: 22px; text-align: center; color: var(--muted); font-size: 14px; }
+    .app-message { display: none; margin-bottom: 18px; }
+    .app-message.active { display: block; }
+
+    @media (max-width: 1200px) {
+      .summary-grid, .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .brand { font-size: 34px; }
+    }
+    @media (max-width: 800px) {
+      .tab-grid { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 6px; }
+      .tab-card { min-width: 220px; flex: 0 0 auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand-wrap">
+      <div class="brand">refinas</div>
+      <div class="brand-sub">口座振替失敗者 管理ツール</div>
+    </div>
+    <div class="header-actions">
+      <button class="pill-btn secondary" id="reloadBtn">再読み込み</button>
+      <button class="pill-btn" id="openImportTabBtn">CSVインポートへ</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <div class="tab-grid">
+      <button class="tab-card active" data-tab="dashboard"><span class="tab-icon">📊</span><span>ダッシュボード</span></button>
+      <button class="tab-card" data-tab="list"><span class="tab-icon">📋</span><span>失敗者一覧</span></button>
+      <button class="tab-card" data-tab="stores"><span class="tab-icon">🏬</span><span>店舗範囲管理</span></button>
+    </div>
+
+    <div class="panel">
+      <div class="card app-message" id="appMessage"></div>
+
+      <section id="dashboard" class="section active">
+        <div class="card">
+          <h2>ダッシュボード検索</h2>
+          <div class="grid grid-4">
+            <div><label for="dashFilterMonth">対象月</label><input type="month" id="dashFilterMonth" /></div>
+            <div><label for="dashFilterStore">店舗</label><select id="dashFilterStore"><option value="">すべて</option></select></div>
+            <div><label for="dashFilterKeyword">検索</label><input type="text" id="dashFilterKeyword" placeholder="名前・電話番号・生徒番号" /></div>
+            <div><label>&nbsp;</label><button class="btn-blue" id="dashApplyFilterBtn" style="width:100%;">検索</button></div>
+          </div>
+          <div class="actions"><button class="btn-secondary" id="dashResetFilterBtn">条件リセット</button></div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-box red"><div class="label">総件数</div><div class="value" id="dashTotal">0</div></div>
+          <div class="summary-box red"><div class="label">未完了件数</div><div class="value" id="dashIncomplete">0</div></div>
+          <div class="summary-box red"><div class="label">未対応</div><div class="value" id="dashUnprocessed">0</div></div>
+          <div class="summary-box orange"><div class="label">遅延</div><div class="value" id="dashDelayed">0</div></div>
+          <div class="summary-box green"><div class="label">支払い済み</div><div class="value" id="dashPaid">0</div></div>
+        </div>
+
+        <div class="card">
+          <h2>未完了の人</h2>
+          <p class="note" id="dashIncompleteSummary"></p>
+          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>名前</th><th>電話番号</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>メモ</th></tr></thead><tbody id="dashIncompleteBody"></tbody></table></div>
+        </div>
+
+        <div class="card">
+          <h2>遅延の人</h2>
+          <p class="note" id="dashDelayedSummary"></p>
+          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>名前</th><th>電話番号</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>メモ</th></tr></thead><tbody id="dashDelayedBody"></tbody></table></div>
+        </div>
+
+        <div class="card">
+          <h2>未対応の人</h2>
+          <p class="note" id="dashUnprocessedSummary"></p>
+          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>名前</th><th>電話番号</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>メモ</th></tr></thead><tbody id="dashUnprocessedBody"></tbody></table></div>
+        </div>
+
+        <div class="card">
+          <h2>店舗別集計</h2>
+          <div class="table-wrap"><table><thead><tr><th>店舗</th><th>総件数</th><th>未完了</th><th>未対応</th><th>支払い予定</th><th>遅延</th><th>支払い済み</th><th>無視</th></tr></thead><tbody id="storeSummaryBody"></tbody></table></div>
+        </div>
+
+        <div class="card">
+          <h2>振替結果別集計</h2>
+          <div class="table-wrap"><table><thead><tr><th>振替結果</th><th>件数</th></tr></thead><tbody id="reasonSummaryBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="import" class="section">
+        <div class="card">
+          <h2>CSVインポート</h2>
+          <div class="form-block">
+            <div class="grid grid-2">
+              <div><label for="targetMonth">対象月</label><input type="month" id="targetMonth" /></div>
+              <div><label for="csvFile">CSVファイル</label><input type="file" id="csvFile" accept=".csv,text/csv" /></div>
+            </div>
+            <div class="actions"><button class="btn-primary" id="previewBtn">プレビュー</button><button class="btn-secondary" id="clearPreviewBtn">プレビュー削除</button></div>
+          </div>
+          <p class="note" style="margin-top:14px;">使用する列は「生徒番号 / 生徒名 / ふりがな / 電話番号 / 口座名義 / 金額 / 振替結果」です。<br>「振替銀行(銀行コード）」「支店名（支店コード）」「振替口座番号」「顧客番号」は、CSVに含まれていても読み込み・保存しません。</p>
+        </div>
+        <div class="card hidden" id="previewCard">
+          <h2>インポートプレビュー</h2>
+          <p id="previewSummary" class="note"></p>
+          <div class="actions"><button class="btn-primary" id="importBtn">この内容で取り込む</button><button class="btn-secondary" id="downloadErrorBtn">エラー行CSVを出力</button></div>
+          <div class="table-wrap" style="margin-top:14px;"><table><thead><tr><th>判定</th><th>エラー内容</th><th>対象月</th><th>店舗開始番号</th><th>店舗名</th><th>生徒番号</th><th>生徒名</th><th>電話番号</th><th>金額</th><th>振替結果</th></tr></thead><tbody id="previewBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="list" class="section">
+        <div class="card">
+          <h2>失敗者一覧</h2>
+          <div class="grid grid-4">
+            <div><label for="filterMonth">対象月</label><input type="month" id="filterMonth" /></div>
+            <div><label for="filterStore">店舗</label><select id="filterStore"><option value="">すべて</option></select></div>
+            <div><label for="filterReason">振替結果</label><select id="filterReason"><option value="">すべて</option></select></div>
+            <div><label for="filterStatus">対応ステータス</label><select id="filterStatus"><option value="">すべて</option></select></div>
+          </div>
+          <div class="grid grid-3" style="margin-top:14px;">
+            <div><label for="filterKeyword">検索</label><input type="text" id="filterKeyword" placeholder="生徒名・ふりがな・電話番号・生徒番号" /></div>
+            <div><label for="filterSpecial">特殊条件</label><select id="filterSpecial"><option value="">指定なし</option><option value="incomplete">未完了のみ</option><option value="unprocessed">未対応のみ</option><option value="scheduled">支払い予定のみ</option><option value="delayed">遅延のみ</option><option value="paid">支払い済みのみ</option><option value="ignore">無視のみ</option></select></div>
+            <div><label>&nbsp;</label><button class="btn-blue" id="applyFilterBtn" style="width:100%;">絞り込み</button></div>
+          </div>
+          <div class="actions"><button class="btn-secondary" id="resetFilterBtn">条件リセット</button><button class="btn-secondary" id="exportCsvBtn">表示中のCSV出力</button><button class="btn-danger" id="deleteAllBtn">全データ削除</button></div>
+        </div>
+        <div class="card">
+          <h2>一覧</h2>
+          <p id="listSummary" class="note"></p>
+          <div class="table-wrap"><table><thead><tr><th>詳細</th><th>対象月</th><th>店舗</th><th>生徒番号</th><th>生徒名</th><th>電話番号</th><th>金額</th><th>振替結果</th><th>対応ステータス</th><th>支払い予定日</th><th>支払い完了日</th><th>メモ</th></tr></thead><tbody id="paymentListBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="stores" class="section">
+        <div class="card">
+          <h2>店舗範囲管理</h2>
+          <p class="note">生徒番号の開始番号ごとに店舗を判定します。<br>例：370000 を八王子にすると、次の開始番号の直前まで八王子として扱われます。</p>
+          <div class="form-block">
+            <div class="grid grid-3">
+              <div><label for="newStoreStartNumber">開始生徒番号</label><input type="number" id="newStoreStartNumber" placeholder="例：390000" /></div>
+              <div><label for="newStoreName">店舗名</label><input type="text" id="newStoreName" placeholder="例：新宿" /></div>
+              <div><label>&nbsp;</label><button class="btn-primary" id="addStoreBtn" style="width:100%;">店舗を追加</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>現在の店舗範囲マスタ</h2>
+          <div class="danger-note">開始番号を変更すると、今後のCSV取り込み時の店舗判定に影響します。<br>すでに取り込んだデータの店舗名は自動では変わりません。</div>
+          <div class="table-wrap" style="margin-top:14px;"><table><thead><tr><th>開始生徒番号</th><th>終了目安</th><th>店舗名</th><th>操作</th></tr></thead><tbody id="storeCodeBody"></tbody></table></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="detailModal">
+    <div class="modal">
+      <div class="modal-header"><h2>詳細</h2><button class="btn-secondary btn-small" id="closeModalBtn">閉じる</button></div>
+      <div id="detailContent"></div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+    let supabaseClient = null;
+
+    const FAILURE_REASONS = ['資金不足', 'その他', '依頼書なし', '取引なし', '預金者の都合による振替停止', '委託者の都合による振替停止'];
+    const HANDLING_STATUSES = ['未対応', '無視', '店舗支払い予定（日付未定）', '店舗支払い予定（日付決定）', '口座振り込み予定（日付決定）', '店舗支払い済み', '口座振り込み済み'];
+    const SCHEDULED_STATUSES = ['店舗支払い予定（日付未定）', '店舗支払い予定（日付決定）', '口座振り込み予定（日付決定）'];
+    const DATE_REQUIRED_STATUSES = ['店舗支払い予定（日付決定）', '口座振り込み予定（日付決定）'];
+    const PAID_STATUSES = ['店舗支払い済み', '口座振り込み済み'];
+
+    let payments = [];
+    let storeRanges = [];
+    let previewRows = [];
+    let currentFilteredRows = [];
+    let dashboardFilteredRows = [];
+
+    const els = {
+      tabCards: document.querySelectorAll('.tab-card'),
+      sections: document.querySelectorAll('.section'),
+      appMessage: document.getElementById('appMessage'),
+      reloadBtn: document.getElementById('reloadBtn'),
+      openImportTabBtn: document.getElementById('openImportTabBtn'),
+      dashFilterMonth: document.getElementById('dashFilterMonth'),
+      dashFilterStore: document.getElementById('dashFilterStore'),
+      dashFilterKeyword: document.getElementById('dashFilterKeyword'),
+      dashApplyFilterBtn: document.getElementById('dashApplyFilterBtn'),
+      dashResetFilterBtn: document.getElementById('dashResetFilterBtn'),
+      dashTotal: document.getElementById('dashTotal'),
+      dashIncomplete: document.getElementById('dashIncomplete'),
+      dashUnprocessed: document.getElementById('dashUnprocessed'),
+      dashScheduled: document.getElementById('dashScheduled'),
+      dashDelayed: document.getElementById('dashDelayed'),
+      dashPaid: document.getElementById('dashPaid'),
+      dashIncompleteSummary: document.getElementById('dashIncompleteSummary'),
+      dashDelayedSummary: document.getElementById('dashDelayedSummary'),
+      dashUnprocessedSummary: document.getElementById('dashUnprocessedSummary'),
+      dashIncompleteBody: document.getElementById('dashIncompleteBody'),
+      dashDelayedBody: document.getElementById('dashDelayedBody'),
+      dashUnprocessedBody: document.getElementById('dashUnprocessedBody'),
+      storeSummaryBody: document.getElementById('storeSummaryBody'),
+      reasonSummaryBody: document.getElementById('reasonSummaryBody'),
+      targetMonth: document.getElementById('targetMonth'),
+      csvFile: document.getElementById('csvFile'),
+      previewBtn: document.getElementById('previewBtn'),
+      clearPreviewBtn: document.getElementById('clearPreviewBtn'),
+      previewCard: document.getElementById('previewCard'),
+      previewSummary: document.getElementById('previewSummary'),
+      previewBody: document.getElementById('previewBody'),
+      importBtn: document.getElementById('importBtn'),
+      downloadErrorBtn: document.getElementById('downloadErrorBtn'),
+      filterMonth: document.getElementById('filterMonth'),
+      filterStore: document.getElementById('filterStore'),
+      filterReason: document.getElementById('filterReason'),
+      filterStatus: document.getElementById('filterStatus'),
+      filterKeyword: document.getElementById('filterKeyword'),
+      filterSpecial: document.getElementById('filterSpecial'),
+      applyFilterBtn: document.getElementById('applyFilterBtn'),
+      resetFilterBtn: document.getElementById('resetFilterBtn'),
+      exportCsvBtn: document.getElementById('exportCsvBtn'),
+      deleteAllBtn: document.getElementById('deleteAllBtn'),
+      listSummary: document.getElementById('listSummary'),
+      paymentListBody: document.getElementById('paymentListBody'),
+      newStoreStartNumber: document.getElementById('newStoreStartNumber'),
+      newStoreName: document.getElementById('newStoreName'),
+      addStoreBtn: document.getElementById('addStoreBtn'),
+      storeCodeBody: document.getElementById('storeCodeBody'),
+      detailModal: document.getElementById('detailModal'),
+      detailContent: document.getElementById('detailContent'),
+      closeModalBtn: document.getElementById('closeModalBtn')
+    };
+
+    function showMessage(title, message) {
+      els.appMessage.classList.add('active');
+      els.appMessage.innerHTML = `<h2>${escapeHtml(title)}</h2><p class="note">${escapeHtml(message)}</p>`;
+    }
+
+    function clearMessage() {
+      els.appMessage.classList.remove('active');
+      els.appMessage.innerHTML = '';
+    }
+
+    function createSupabaseClient() {
+      if (!window.supabase || !window.supabase.createClient) {
+        throw new Error('Supabase CDNの読み込みに失敗しました。インターネット接続、CDNブロック、scriptタグを確認してください。');
+      }
+      return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+
+    async function init() {
+      bindEvents();
+      renderEmptyState();
+
+      try {
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR_SUPABASE_URL') || SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY')) {
+          showMessage('Supabase設定が未入力です', 'HTML内の SUPABASE_URL と SUPABASE_ANON_KEY を実際の値に差し替えてください。タブの切り替えはこの状態でも動きます。');
+          return;
+        }
+
+        supabaseClient = createSupabaseClient();
+        await loadAllData();
+        clearMessage();
+        populateFilters();
+        populateDashboardFilters();
+        applyDashboardFilters();
+        renderDashboard();
+        applyFilters();
+      } catch (error) {
+        showMessage('読み込みエラー', String(error.message || error));
+      }
+    }
+
+    function bindEvents() {
+      els.tabCards.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+      els.reloadBtn.addEventListener('click', reloadData);
+      els.openImportTabBtn.addEventListener('click', () => switchTab('import'));
+      els.dashApplyFilterBtn.addEventListener('click', () => { applyDashboardFilters(); renderDashboard(); });
+      els.dashResetFilterBtn.addEventListener('click', () => { els.dashFilterMonth.value = ''; els.dashFilterStore.value = ''; els.dashFilterKeyword.value = ''; applyDashboardFilters(); renderDashboard(); });
+      els.previewBtn.addEventListener('click', handlePreview);
+      els.clearPreviewBtn.addEventListener('click', clearPreview);
+      els.importBtn.addEventListener('click', importPreviewRows);
+      els.downloadErrorBtn.addEventListener('click', downloadErrorRows);
+      els.applyFilterBtn.addEventListener('click', applyFilters);
+      els.resetFilterBtn.addEventListener('click', resetFilters);
+      els.exportCsvBtn.addEventListener('click', exportFilteredCsv);
+      els.deleteAllBtn.addEventListener('click', deleteAllPayments);
+      els.addStoreBtn.addEventListener('click', addStoreRange);
+      els.closeModalBtn.addEventListener('click', closeDetailModal);
+      els.detailModal.addEventListener('click', (e) => { if (e.target === els.detailModal) closeDetailModal(); });
+    }
+
+    async function reloadData() {
+      if (!supabaseClient) {
+        showMessage('Supabase未接続', 'SUPABASE_URL と SUPABASE_ANON_KEY を設定してください。');
+        return;
+      }
+      try {
+        await loadAllData();
+        clearMessage();
+        populateFilters();
+        populateDashboardFilters();
+        applyDashboardFilters();
+        renderDashboard();
+        applyFilters();
+        alert('再読み込みしました。');
+      } catch (error) {
+        showMessage('再読み込みエラー', String(error.message || error));
+      }
+    }
+
+    function switchTab(tabId) {
+      els.tabCards.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+      els.sections.forEach(section => section.classList.toggle('active', section.id === tabId));
+      if (tabId === 'dashboard') { applyDashboardFilters(); renderDashboard(); }
+      if (tabId === 'list') { populateFilters(); applyFilters(); }
+      if (tabId === 'stores') renderStoreRangeTable();
+    }
+
+    function renderEmptyState() {
+      dashboardFilteredRows = [];
+      currentFilteredRows = [];
+      renderDashboard();
+      renderPaymentList();
+      renderStoreRangeTable();
+    }
+
+    async function loadAllData() { await Promise.all([loadStoreRanges(), loadPayments()]); }
+
+    async function loadStoreRanges() {
+      const { data, error } = await supabaseClient.from('payment_store_ranges').select('*').eq('is_active', true).order('start_number', { ascending: true });
+      if (error) throw new Error('店舗範囲の取得に失敗しました：' + error.message);
+      storeRanges = data || [];
+      renderStoreRangeTable();
+    }
+
+    async function loadPayments() {
+      const { data, error } = await supabaseClient.from('failed_payments').select('*').order('target_month', { ascending: false }).order('store_name', { ascending: true }).order('student_number', { ascending: true });
+      if (error) throw new Error('失敗者データの取得に失敗しました：' + error.message);
+      payments = data || [];
+    }
+
+    function normalizeText(value) { return String(value ?? '').trim(); }
+    function escapeHtml(value) { return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
+    function normalizeAmount(value) { const text = String(value ?? '').replace(/[^\d.-]/g, ''); if (!text) return null; const num = Number(text); return Number.isFinite(num) ? num : null; }
+    function formatYen(value) { if (value === null || value === undefined || value === '') return ''; const num = Number(value); if (!Number.isFinite(num)) return ''; return num.toLocaleString('ja-JP'); }
+    function todayDateString() { const now = new Date(); const y = now.getFullYear(); const m = String(now.getMonth() + 1).padStart(2, '0'); const d = String(now.getDate()).padStart(2, '0'); return `${y}-${m}-${d}`; }
+    function formatDateTime(value) { if (!value) return ''; const d = new Date(value); if (Number.isNaN(d.getTime())) return value; const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); const h = String(d.getHours()).padStart(2, '0'); const min = String(d.getMinutes()).padStart(2, '0'); return `${y}-${m}-${day} ${h}:${min}`; }
+    function isPaid(item) { return PAID_STATUSES.includes(item.handling_status); }
+    function isIgnored(item) { return item.handling_status === '無視'; }
+    function isIncomplete(item) { return !isPaid(item) && !isIgnored(item); }
+
+    function isDelayed(item) {
+      if (!DATE_REQUIRED_STATUSES.includes(item.handling_status)) return false;
+      if (!item.payment_due_date) return false;
+      if (PAID_STATUSES.includes(item.handling_status)) return false;
+      const today = new Date(todayDateString() + 'T00:00:00');
+      const dueDate = new Date(item.payment_due_date + 'T00:00:00');
+      return dueDate < today;
+    }
+
+    function getStoreByStudentNumber(studentNumber) {
+      const num = Number(String(studentNumber || '').replace(/[^\d]/g, ''));
+      if (!Number.isFinite(num) || num <= 0) return { start_number: null, store_name: '', error: '生徒番号が数値ではありません' };
+      let matched = null;
+      for (const range of storeRanges) {
+        if (num >= Number(range.start_number)) matched = range;
+        else break;
+      }
+      if (!matched) return { start_number: null, store_name: '', error: '該当する店舗範囲がありません' };
+      return { start_number: Number(matched.start_number), store_name: matched.store_name, error: '' };
+    }
+
+    function getStatusBadgeClass(status) {
+      if (status === '未対応') return 'badge-red';
+      if (status === '無視') return 'badge-gray';
+      if (status === '店舗支払い済み') return 'badge-green';
+      if (status === '口座振り込み済み') return 'badge-blue';
+      if (status === '口座振り込み予定（日付決定）') return 'badge-blue';
+      if (String(status).includes('予定')) return 'badge-orange';
+      return 'badge-gray';
+    }
+
+    function getRowClass(item) {
+      if (item.handling_status === '店舗支払い済み') return 'row-paid-store';
+      if (item.handling_status === '口座振り込み済み') return 'row-paid-transfer';
+      if (item.handling_status === '無視') return 'row-ignore';
+      return '';
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      let current = [];
+      let field = '';
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+        if (char === '"' && inQuotes && next === '"') { field += '"'; i++; continue; }
+        if (char === '"') { inQuotes = !inQuotes; continue; }
+        if (char === ',' && !inQuotes) { current.push(field); field = ''; continue; }
+        if ((char === '\n' || char === '\r') && !inQuotes) { if (char === '\r' && next === '\n') i++; current.push(field); rows.push(current); current = []; field = ''; continue; }
+        field += char;
+      }
+      current.push(field);
+      rows.push(current);
+      return rows.filter(row => row.some(cell => normalizeText(cell) !== ''));
+    }
+
+    function mapCsvRows(rows, targetMonth) {
+      if (rows.length === 0) return [];
+      const headers = rows[0].map(h => normalizeText(h));
+      const bodyRows = rows.slice(1);
+      const col = {
+        student_number: headers.indexOf('生徒番号'),
+        student_name: headers.indexOf('生徒名'),
+        student_kana: headers.indexOf('ふりがな'),
+        phone: headers.indexOf('電話番号'),
+        account_holder: headers.indexOf('口座名義'),
+        amount: headers.indexOf('金額'),
+        failure_reason: headers.indexOf('振替結果')
+      };
+      const requiredHeaders = [['生徒番号', col.student_number], ['生徒名', col.student_name], ['振替結果', col.failure_reason]];
+      const missingHeaders = requiredHeaders.filter(item => item[1] === -1).map(item => item[0]);
+      if (missingHeaders.length > 0) { alert('CSVの必須ヘッダーが不足しています：' + missingHeaders.join('、')); return []; }
+      return bodyRows.map((row, index) => {
+        const studentNumber = normalizeText(row[col.student_number]);
+        const studentName = normalizeText(row[col.student_name]);
+        const failureReason = normalizeText(row[col.failure_reason]);
+        const storeResult = getStoreByStudentNumber(studentNumber);
+        const errors = [];
+        if (!targetMonth) errors.push('対象月が未選択です');
+        if (!studentNumber) errors.push('生徒番号が空です');
+        if (!studentName) errors.push('生徒名が空です');
+        if (storeResult.error) errors.push(storeResult.error);
+        if (!failureReason) errors.push('振替結果が空です');
+        if (failureReason && !FAILURE_REASONS.includes(failureReason)) errors.push(`振替結果「${failureReason}」は許可されていません`);
+        return {
+          row_number: index + 2,
+          is_valid: errors.length === 0,
+          errors,
+          target_month: targetMonth,
+          store_start_number: storeResult.start_number,
+          store_name: storeResult.store_name,
+          student_number: studentNumber,
+          student_name: studentName,
+          student_kana: normalizeText(row[col.student_kana]),
+          phone: normalizeText(row[col.phone]),
+          account_holder: normalizeText(row[col.account_holder]),
+          amount: normalizeAmount(row[col.amount]),
+          failure_reason: failureReason,
+          handling_status: '未対応',
+          payment_due_date: null,
+          paid_at: null,
+          paid_method: null,
+          memo: ''
+        };
+      });
+    }
+
+    async function handlePreview() {
+      if (!supabaseClient) { alert('Supabase設定をしてください。'); return; }
+      const targetMonth = els.targetMonth.value;
+      const file = els.csvFile.files[0];
+      if (!targetMonth) { alert('対象月を選択してください。'); return; }
+      if (!file) { alert('CSVファイルを選択してください。'); return; }
+      if (storeRanges.length === 0) { alert('先に店舗範囲マスタを登録してください。'); return; }
+      const text = await file.text();
+      const rows = parseCsv(text);
+      previewRows = mapCsvRows(rows, targetMonth);
+      renderPreview();
+    }
+
+    function renderPreview() {
+      els.previewCard.classList.remove('hidden');
+      els.previewBody.innerHTML = '';
+      const total = previewRows.length;
+      const ok = previewRows.filter(row => row.is_valid).length;
+      const ng = total - ok;
+      els.previewSummary.textContent = `全 ${total} 件 / 取込可能 ${ok} 件 / エラー ${ng} 件`;
+      previewRows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.is_valid ? '<span class="success-text">OK</span>' : '<span class="error-text">エラー</span>'}</td><td>${escapeHtml(row.errors.join(' / '))}</td><td>${escapeHtml(row.target_month)}</td><td>${escapeHtml(row.store_start_number || '')}</td><td>${escapeHtml(row.store_name || '未判定')}</td><td>${escapeHtml(row.student_number)}</td><td>${escapeHtml(row.student_name)}</td><td>${escapeHtml(row.phone || '')}</td><td>${formatYen(row.amount)}</td><td>${escapeHtml(row.failure_reason)}</td>`;
+        els.previewBody.appendChild(tr);
+      });
+      els.importBtn.disabled = ng > 0 || ok === 0;
+      els.importBtn.style.opacity = els.importBtn.disabled ? '0.5' : '1';
+      els.importBtn.style.cursor = els.importBtn.disabled ? 'not-allowed' : 'pointer';
+    }
+
+    function clearPreview() {
+      previewRows = [];
+      els.previewBody.innerHTML = '';
+      els.previewSummary.textContent = '';
+      els.previewCard.classList.add('hidden');
+      els.csvFile.value = '';
+    }
+
+    async function importPreviewRows() {
+      if (!supabaseClient) { alert('Supabase設定をしてください。'); return; }
+      const validRows = previewRows.filter(row => row.is_valid);
+      if (validRows.length === 0) { alert('取り込めるデータがありません。'); return; }
+      const payload = validRows.map(row => ({
+        target_month: row.target_month,
+        store_start_number: row.store_start_number,
+        store_name: row.store_name,
+        student_number: row.student_number,
+        student_name: row.student_name,
+        student_kana: row.student_kana || null,
+        phone: row.phone || null,
+        account_holder: row.account_holder || null,
+        amount: row.amount,
+        failure_reason: row.failure_reason,
+        handling_status: row.handling_status,
+        payment_due_date: null,
+        paid_at: null,
+        paid_method: null,
+        memo: '',
+        updated_at: new Date().toISOString()
+      }));
+      const { error } = await supabaseClient.from('failed_payments').upsert(payload, { onConflict: 'target_month,store_start_number,student_number' });
+      if (error) { alert('取り込みに失敗しました：' + error.message); return; }
+      alert(`取り込み完了：${payload.length} 件`);
+      clearPreview();
+      await loadPayments();
+      populateFilters();
+      populateDashboardFilters();
+      applyDashboardFilters();
+      renderDashboard();
+      applyFilters();
+      switchTab('list');
+    }
+
+    function downloadErrorRows() {
+      const errorRows = previewRows.filter(row => !row.is_valid);
+      if (errorRows.length === 0) { alert('エラー行はありません。'); return; }
+      const rows = [['行番号', 'エラー内容', '対象月', '店舗開始番号', '店舗名', '生徒番号', '生徒名', '振替結果'], ...errorRows.map(row => [row.row_number, row.errors.join(' / '), row.target_month, row.store_start_number, row.store_name, row.student_number, row.student_name, row.failure_reason])];
+      downloadCsv('error_rows.csv', rows);
+    }
+
+    function populateFilters() {
+      populateSelect(els.filterReason, FAILURE_REASONS, 'すべて');
+      populateSelect(els.filterStatus, HANDLING_STATUSES, 'すべて');
+      const stores = [...new Set(payments.map(p => p.store_name).filter(Boolean))].sort();
+      populateSelect(els.filterStore, stores, 'すべて');
+    }
+
+    function populateDashboardFilters() {
+      const stores = [...new Set(payments.map(p => p.store_name).filter(Boolean))].sort();
+      populateSelect(els.dashFilterStore, stores, 'すべて');
+    }
+
+    function populateSelect(select, values, firstLabel) {
+      const currentValue = select.value;
+      select.innerHTML = `<option value="">${firstLabel}</option>`;
+      values.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+      select.value = currentValue;
+    }
+
+    function applyDashboardFilters() {
+      const month = els.dashFilterMonth.value;
+      const store = els.dashFilterStore.value;
+      const keyword = normalizeText(els.dashFilterKeyword.value).toLowerCase();
+      dashboardFilteredRows = payments.filter(item => {
+        if (month && item.target_month !== month) return false;
+        if (store && item.store_name !== store) return false;
+        if (keyword) {
+          const target = [item.student_name, item.student_kana, item.phone, item.student_number].join(' ').toLowerCase();
+          if (!target.includes(keyword)) return false;
+        }
+        return true;
+      });
+    }
+
+    function applyFilters() {
+      const month = els.filterMonth.value;
+      const store = els.filterStore.value;
+      const reason = els.filterReason.value;
+      const status = els.filterStatus.value;
+      const keyword = normalizeText(els.filterKeyword.value).toLowerCase();
+      const special = els.filterSpecial.value;
+      currentFilteredRows = payments.filter(item => {
+        if (month && item.target_month !== month) return false;
+        if (store && item.store_name !== store) return false;
+        if (reason && item.failure_reason !== reason) return false;
+        if (status && item.handling_status !== status) return false;
+        if (keyword) {
+          const target = [item.student_name, item.student_kana, item.phone, item.student_number].join(' ').toLowerCase();
+          if (!target.includes(keyword)) return false;
+        }
+        if (special === 'incomplete' && !isIncomplete(item)) return false;
+        if (special === 'unprocessed' && item.handling_status !== '未対応') return false;
+        if (special === 'scheduled' && !SCHEDULED_STATUSES.includes(item.handling_status)) return false;
+        if (special === 'delayed' && !isDelayed(item)) return false;
+        if (special === 'paid' && !PAID_STATUSES.includes(item.handling_status)) return false;
+        if (special === 'ignore' && item.handling_status !== '無視') return false;
+        return true;
+      });
+      renderPaymentList();
+    }
+
+    function resetFilters() {
+      els.filterMonth.value = '';
+      els.filterStore.value = '';
+      els.filterReason.value = '';
+      els.filterStatus.value = '';
+      els.filterKeyword.value = '';
+      els.filterSpecial.value = '';
+      applyFilters();
+    }
+
+    function renderDashboard() {
+      const rows = dashboardFilteredRows;
+      const total = rows.length;
+      const incompleteRows = rows.filter(isIncomplete);
+      const unprocessedRows = rows.filter(p => p.handling_status === '未対応');
+      const delayedRows = rows.filter(isDelayed);
+      const paidRows = rows.filter(p => PAID_STATUSES.includes(p.handling_status));
+      els.dashTotal.textContent = total;
+      els.dashIncomplete.textContent = incompleteRows.length;
+      els.dashUnprocessed.textContent = unprocessedRows.length;
+      els.dashDelayed.textContent = delayedRows.length;
+      els.dashPaid.textContent = paidRows.length;
+      els.dashIncompleteSummary.textContent = `未完了 ${incompleteRows.length} 件`;
+      els.dashDelayedSummary.textContent = `遅延 ${delayedRows.length} 件`;
+      els.dashUnprocessedSummary.textContent = `未対応 ${unprocessedRows.length} 件`;
+      renderDashboardPersonTable(els.dashIncompleteBody, incompleteRows);
+      renderDashboardPersonTable(els.dashDelayedBody, delayedRows);
+      renderDashboardPersonTable(els.dashUnprocessedBody, unprocessedRows);
+      renderStoreSummary(rows);
+      renderReasonSummary(rows);
+    }
+
+    function renderDashboardPersonTable(tbody, rows) {
+      tbody.innerHTML = '';
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="placeholder-box">該当データがありません。</td></tr>';
+        return;
+      }
+
+      rows.forEach(item => {
+        const delayedHtml = isDelayed(item) ? '<span class="delay-alert">遅延</span>' : '';
+        const tr = document.createElement('tr');
+        tr.className = getRowClass(item);
+
+        tr.innerHTML = `
+          <td>
+            <button class="btn-secondary btn-small" onclick="openDetailModal('${item.id}')">詳細</button>
+          </td>
+          <td>${escapeHtml(item.target_month)}</td>
+          <td>${escapeHtml(item.store_name)}</td>
+          <td>${escapeHtml(item.student_number)}</td>
+          <td>${escapeHtml(item.student_name)}</td>
+          <td>${escapeHtml(item.phone || '')}</td>
+          <td>${formatYen(item.amount)}</td>
+          <td>${escapeHtml(item.failure_reason)}</td>
+          <td class="status-cell">
+            <select onchange="updatePaymentStatus('${item.id}', this.value)">
+              ${HANDLING_STATUSES.map(status => `
+                <option value="${escapeHtml(status)}" ${item.handling_status === status ? 'selected' : ''}>
+                  ${escapeHtml(status)}
+                </option>
+              `).join('')}
+            </select>
+            <div class="status-chip-wrap">
+              <span class="badge ${getStatusBadgeClass(item.handling_status)}">
+                ${escapeHtml(item.handling_status)}
+              </span>
+            </div>
+          </td>
+          <td class="due-wrap">
+            <input type="date" value="${escapeHtml(item.payment_due_date || '')}" onchange="updatePaymentField('${item.id}', 'payment_due_date', this.value || null)" />
+            ${delayedHtml}
+          </td>
+          <td>
+            <input type="text" value="${escapeHtml(item.memo || '')}" onchange="updatePaymentField('${item.id}', 'memo', this.value)" />
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderPaymentList() {
+      els.paymentListBody.innerHTML = '';
+      els.listSummary.textContent = `表示中 ${currentFilteredRows.length} 件 / 全 ${payments.length} 件`;
+      if (currentFilteredRows.length === 0) {
+        els.paymentListBody.innerHTML = '<tr><td colspan="12" class="placeholder-box">該当データがありません。</td></tr>';
+        return;
+      }
+      currentFilteredRows.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = getRowClass(item);
+        const delayedHtml = isDelayed(item) ? '<span class="delay-alert">遅延</span>' : '';
+        tr.innerHTML = `<td><button class="btn-secondary btn-small" onclick="openDetailModal('${item.id}')">詳細</button></td><td>${escapeHtml(item.target_month)}</td><td>${escapeHtml(item.store_name)}</td><td>${escapeHtml(item.student_number)}</td><td>${escapeHtml(item.student_name)}</td><td>${escapeHtml(item.phone || '')}</td><td>${formatYen(item.amount)}</td><td>${escapeHtml(item.failure_reason)}</td><td class="status-cell"><select onchange="updatePaymentStatus('${item.id}', this.value)">${HANDLING_STATUSES.map(status => `<option value="${escapeHtml(status)}" ${item.handling_status === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}</select><div class="status-chip-wrap"><span class="badge ${getStatusBadgeClass(item.handling_status)}">${escapeHtml(item.handling_status)}</span></div></td><td class="due-wrap"><input type="date" value="${escapeHtml(item.payment_due_date || '')}" onchange="updatePaymentField('${item.id}', 'payment_due_date', this.value || null)" />${delayedHtml}</td><td><input type="date" value="${escapeHtml(item.paid_at || '')}" onchange="updatePaymentField('${item.id}', 'paid_at', this.value || null)" /></td><td><input type="text" value="${escapeHtml(item.memo || '')}" onchange="updatePaymentField('${item.id}', 'memo', this.value)" /></td>`;
+        els.paymentListBody.appendChild(tr);
+      });
+    }
+
+    async function updatePaymentStatus(id, newStatus) {
+      if (!supabaseClient) return;
+      const item = payments.find(row => row.id === id);
+      if (!item) return;
+      const oldStatus = item.handling_status;
+      let nextPaymentDueDate = item.payment_due_date;
+      let nextPaidAt = item.paid_at;
+      let nextPaidMethod = item.paid_method;
+      if (DATE_REQUIRED_STATUSES.includes(newStatus) && !nextPaymentDueDate) {
+        const dueDate = prompt('支払い予定日を入力してください。例：2026-06-25');
+        if (!dueDate) { applyFilters(); return; }
+        nextPaymentDueDate = dueDate;
+      }
+      if (newStatus === '店舗支払い済み') { nextPaidMethod = '店舗支払い'; if (!nextPaidAt) nextPaidAt = todayDateString(); }
+      if (newStatus === '口座振り込み済み') { nextPaidMethod = '口座振り込み'; if (!nextPaidAt) nextPaidAt = todayDateString(); }
+      const payload = { handling_status: newStatus, payment_due_date: nextPaymentDueDate, paid_at: nextPaidAt, paid_method: nextPaidMethod, updated_at: new Date().toISOString() };
+      const { error } = await supabaseClient.from('failed_payments').update(payload).eq('id', id);
+      if (error) { alert('ステータス変更に失敗しました：' + error.message); return; }
+      await supabaseClient.from('failed_payment_logs').insert({ failed_payment_id: id, action_type: 'ステータス変更', action_detail: `${oldStatus} → ${newStatus}`, old_status: oldStatus, new_status: newStatus });
+      await loadPayments();
+      populateDashboardFilters();
+      applyDashboardFilters();
+      renderDashboard();
+      applyFilters();
+    }
+
+    async function updatePaymentField(id, field, value) {
+      if (!supabaseClient) return;
+      const item = payments.find(row => row.id === id);
+      if (!item) return;
+      const oldValue = item[field] || '';
+      const payload = { [field]: value, updated_at: new Date().toISOString() };
+      if (field === 'paid_at' && value && !item.paid_method) {
+        if (item.handling_status === '店舗支払い済み') payload.paid_method = '店舗支払い';
+        if (item.handling_status === '口座振り込み済み') payload.paid_method = '口座振り込み';
+      }
+      const { error } = await supabaseClient.from('failed_payments').update(payload).eq('id', id);
+      if (error) { alert('更新に失敗しました：' + error.message); return; }
+      await supabaseClient.from('failed_payment_logs').insert({ failed_payment_id: id, action_type: '項目更新', action_detail: `${field}: ${oldValue || '空欄'} → ${value || '空欄'}` });
+      await loadPayments();
+      populateDashboardFilters();
+      applyDashboardFilters();
+      renderDashboard();
+      applyFilters();
+    }
+
+    async function openDetailModal(id) {
+      const item = payments.find(row => row.id === id);
+      if (!item) return;
+      let logs = [];
+      if (supabaseClient) {
+        const result = await supabaseClient.from('failed_payment_logs').select('*').eq('failed_payment_id', id).order('created_at', { ascending: false });
+        if (result.error) alert('履歴取得に失敗しました：' + result.error.message);
+        logs = result.data || [];
+      }
+      const delayedHtml = isDelayed(item) ? '<span class="delay-alert">遅延</span>' : '';
+      els.detailContent.innerHTML = `<div class="grid grid-2"><div class="card"><h3>基本情報</h3><table><tbody><tr><th>対象月</th><td>${escapeHtml(item.target_month)}</td></tr><tr><th>店舗開始番号</th><td>${escapeHtml(item.store_start_number)}</td></tr><tr><th>店舗名</th><td>${escapeHtml(item.store_name)}</td></tr><tr><th>生徒番号</th><td>${escapeHtml(item.student_number)}</td></tr><tr><th>生徒名</th><td>${escapeHtml(item.student_name)}</td></tr><tr><th>ふりがな</th><td>${escapeHtml(item.student_kana || '')}</td></tr><tr><th>電話番号</th><td>${escapeHtml(item.phone || '')}</td></tr></tbody></table></div><div class="card"><h3>振替・対応情報</h3><table><tbody><tr><th>口座名義</th><td>${escapeHtml(item.account_holder || '')}</td></tr><tr><th>金額</th><td>${formatYen(item.amount)}</td></tr><tr><th>振替結果</th><td>${escapeHtml(item.failure_reason)}</td></tr><tr><th>対応ステータス</th><td><span class="badge ${getStatusBadgeClass(item.handling_status)}">${escapeHtml(item.handling_status)}</span></td></tr><tr><th>支払い予定日</th><td>${escapeHtml(item.payment_due_date || '')} ${delayedHtml}</td></tr><tr><th>支払い完了日</th><td>${escapeHtml(item.paid_at || '')}</td></tr><tr><th>支払い方法</th><td>${escapeHtml(item.paid_method || '')}</td></tr><tr><th>メモ</th><td>${escapeHtml(item.memo || '')}</td></tr><tr><th>更新日時</th><td>${escapeHtml(formatDateTime(item.updated_at))}</td></tr></tbody></table></div></div><div class="card"><h3>対応履歴</h3><div class="log-list">${logs.length > 0 ? logs.map(log => `<div class="log-item"><strong>${escapeHtml(formatDateTime(log.created_at))} / ${escapeHtml(log.action_type)}</strong><div>${escapeHtml(log.action_detail || '')}</div></div>`).join('') : '<div class="log-item">履歴はありません。</div>'}</div></div><div class="actions"><button class="btn-danger" onclick="deletePayment('${item.id}')">このデータを削除</button></div>`;
+      els.detailModal.classList.add('active');
+    }
+
+    function closeDetailModal() {
+      els.detailModal.classList.remove('active');
+      els.detailContent.innerHTML = '';
+    }
+
+    async function deletePayment(id) {
+      if (!supabaseClient) return;
+      if (!confirm('このデータを削除しますか？')) return;
+      const { error } = await supabaseClient.from('failed_payments').delete().eq('id', id);
+      if (error) { alert('削除に失敗しました：' + error.message); return; }
+      closeDetailModal();
+      await loadPayments();
+      populateFilters();
+      populateDashboardFilters();
+      applyDashboardFilters();
+      renderDashboard();
+      applyFilters();
+    }
+
+    async function deleteAllPayments() {
+      if (!supabaseClient) return;
+      if (!confirm('全データを削除しますか？この操作は戻せません。')) return;
+      if (!confirm('本当に削除しますか？')) return;
+      const { error } = await supabaseClient.from('failed_payments').delete().gte('store_start_number', 0);
+      if (error) { alert('全削除に失敗しました：' + error.message); return; }
+      await loadPayments();
+      populateFilters();
+      populateDashboardFilters();
+      applyDashboardFilters();
+      renderDashboard();
+      applyFilters();
+    }
+
+    function renderStoreSummary(rows = dashboardFilteredRows) {
+      const map = {};
+      rows.forEach(item => {
+        const key = item.store_name || '未判定';
+        if (!map[key]) map[key] = { total: 0, incomplete: 0, unprocessed: 0, scheduled: 0, delayed: 0, paid: 0, ignore: 0 };
+        map[key].total++;
+        if (isIncomplete(item)) map[key].incomplete++;
+        if (item.handling_status === '未対応') map[key].unprocessed++;
+        if (SCHEDULED_STATUSES.includes(item.handling_status)) map[key].scheduled++;
+        if (isDelayed(item)) map[key].delayed++;
+        if (PAID_STATUSES.includes(item.handling_status)) map[key].paid++;
+        if (item.handling_status === '無視') map[key].ignore++;
+      });
+      els.storeSummaryBody.innerHTML = '';
+      const keys = Object.keys(map).sort();
+      if (keys.length === 0) { els.storeSummaryBody.innerHTML = '<tr><td colspan="8" class="placeholder-box">データがありません。</td></tr>'; return; }
+      keys.forEach(storeName => {
+        const row = map[storeName];
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(storeName)}</td><td>${row.total}</td><td>${row.incomplete}</td><td>${row.unprocessed}</td><td>${row.scheduled}</td><td>${row.delayed}</td><td>${row.paid}</td><td>${row.ignore}</td>`;
+        els.storeSummaryBody.appendChild(tr);
+      });
+    }
+
+    function renderReasonSummary(rows = dashboardFilteredRows) {
+      const map = {};
+      FAILURE_REASONS.forEach(reason => map[reason] = 0);
+      rows.forEach(item => { if (!map[item.failure_reason]) map[item.failure_reason] = 0; map[item.failure_reason]++; });
+      els.reasonSummaryBody.innerHTML = '';
+      Object.keys(map).forEach(reason => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(reason)}</td><td>${map[reason]}</td>`;
+        els.reasonSummaryBody.appendChild(tr);
+      });
+    }
+
+    function renderStoreRangeTable() {
+      els.storeCodeBody.innerHTML = '';
+      const sorted = [...storeRanges].sort((a, b) => Number(a.start_number) - Number(b.start_number));
+      if (sorted.length === 0) { els.storeCodeBody.innerHTML = '<tr><td colspan="4" class="placeholder-box">店舗範囲が登録されていません。</td></tr>'; return; }
+      sorted.forEach((row, index) => {
+        const next = sorted[index + 1];
+        const endNumber = next ? Number(next.start_number) - 1 : '以降';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><input type="number" value="${escapeHtml(row.start_number)}" onchange="updateStoreRange('${row.id}', 'start_number', this.value)" /></td><td>${escapeHtml(endNumber)}</td><td><input type="text" value="${escapeHtml(row.store_name)}" onchange="updateStoreRange('${row.id}', 'store_name', this.value)" /></td><td><button class="btn-danger btn-small" onclick="deleteStoreRange('${row.id}')">削除</button></td>`;
+        els.storeCodeBody.appendChild(tr);
+      });
+    }
+
+    async function addStoreRange() {
+      if (!supabaseClient) { alert('Supabase設定をしてください。'); return; }
+      const startNumber = Number(String(els.newStoreStartNumber.value || '').trim());
+      const storeName = normalizeText(els.newStoreName.value);
+      if (!Number.isFinite(startNumber) || startNumber <= 0) { alert('開始生徒番号を正しく入力してください。'); return; }
+      if (!storeName) { alert('店舗名を入力してください。'); return; }
+      const { error } = await supabaseClient.from('payment_store_ranges').insert({ start_number: startNumber, store_name: storeName });
+      if (error) { alert('店舗追加に失敗しました：' + error.message); return; }
+      els.newStoreStartNumber.value = '';
+      els.newStoreName.value = '';
+      await loadStoreRanges();
+      alert('店舗を追加しました。');
+    }
+
+    async function updateStoreRange(id, field, value) {
+      if (!supabaseClient) return;
+      const payload = { updated_at: new Date().toISOString() };
+      if (field === 'start_number') {
+        const nextNumber = Number(String(value || '').trim());
+        if (!Number.isFinite(nextNumber) || nextNumber <= 0) { alert('開始生徒番号を正しく入力してください。'); renderStoreRangeTable(); return; }
+        payload.start_number = nextNumber;
+      }
+      if (field === 'store_name') {
+        const nextName = normalizeText(value);
+        if (!nextName) { alert('店舗名は空にできません。'); renderStoreRangeTable(); return; }
+        payload.store_name = nextName;
+      }
+      const { error } = await supabaseClient.from('payment_store_ranges').update(payload).eq('id', id);
+      if (error) { alert('店舗範囲の更新に失敗しました：' + error.message); await loadStoreRanges(); return; }
+      await loadStoreRanges();
+    }
+
+    async function deleteStoreRange(id) {
+      if (!supabaseClient) return;
+      const target = storeRanges.find(row => row.id === id);
+      if (!target) { alert('対象の店舗が見つかりません。'); return; }
+      if (!confirm(`「${target.store_name}」を削除しますか？\n開始番号：${target.start_number}`)) return;
+      const { error } = await supabaseClient.from('payment_store_ranges').delete().eq('id', id);
+      if (error) { alert('店舗範囲の削除に失敗しました：' + error.message); return; }
+      await loadStoreRanges();
+    }
+
+    function exportFilteredCsv() {
+      if (currentFilteredRows.length === 0) { alert('出力するデータがありません。'); return; }
+      const rows = [['対象月', '店舗開始番号', '店舗名', '生徒番号', '生徒名', 'ふりがな', '電話番号', '口座名義', '金額', '振替結果', '対応ステータス', '支払い予定日', '遅延', '支払い完了日', '支払い方法', 'メモ'], ...currentFilteredRows.map(item => [item.target_month, item.store_start_number, item.store_name, item.student_number, item.student_name, item.student_kana, item.phone, item.account_holder, item.amount, item.failure_reason, item.handling_status, item.payment_due_date, isDelayed(item) ? '遅延' : '', item.paid_at, item.paid_method, item.memo])];
+      downloadCsv('failed_payments_export.csv', rows);
+    }
+
+    function downloadCsv(filename, rows) {
+      const csv = rows.map(row => row.map(cell => { const value = String(cell ?? ''); return `"${value.replaceAll('"', '""')}"`; }).join(',')).join('\r\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    window.openDetailModal = openDetailModal;
+    window.updatePaymentStatus = updatePaymentStatus;
+    window.updatePaymentField = updatePaymentField;
+    window.deletePayment = deletePayment;
+    window.updateStoreRange = updateStoreRange;
+    window.deleteStoreRange = deleteStoreRange;
+
+    init();
+  </script>
+</body>
+</html>
