@@ -937,7 +937,9 @@
       if (missingHeaders.length > 0) {
         alert(
           'CSVの必須ヘッダーが不足しています：' + missingHeaders.join('、') + '\n\n' +
-          'このツールは「タイトル行の次の行」をヘッダーとして読み込んでいます。'
+          'このツールは「タイトル行の次の行」をヘッダーとして読み込んでいます。\n' +
+          'CSV UTF-8 / Shift-JIS / タブ区切りに対応しています。\n' +
+          'Excelファイル（.xlsx）のままではなく、CSVまたはテキスト形式で保存してください。'
         );
         return [];
       }
@@ -979,6 +981,40 @@
       });
     }
 
+    async function readCsvTextFile(file) {
+      const buffer = await file.arrayBuffer();
+
+      const decode = (encoding) => {
+        try {
+          return new TextDecoder(encoding).decode(buffer);
+        } catch (error) {
+          return '';
+        }
+      };
+
+      const utf8Text = decode('utf-8');
+
+      if (
+        utf8Text.includes('生徒番号') ||
+        utf8Text.includes('生徒名') ||
+        utf8Text.includes('振替結果')
+      ) {
+        return utf8Text;
+      }
+
+      const shiftJisText = decode('shift_jis');
+
+      if (
+        shiftJisText.includes('生徒番号') ||
+        shiftJisText.includes('生徒名') ||
+        shiftJisText.includes('振替結果')
+      ) {
+        return shiftJisText;
+      }
+
+      return utf8Text || shiftJisText;
+    }
+
     async function handlePreview() {
       if (!supabaseClient) { alert('Supabase設定をしてください。'); return; }
       const targetMonth = els.targetMonth.value;
@@ -986,7 +1022,7 @@
       if (!targetMonth) { alert('対象月を選択してください。'); return; }
       if (!file) { alert('CSVファイルを選択してください。'); return; }
       if (storeRanges.length === 0) { alert('先に店舗範囲マスタを登録してください。'); return; }
-      const text = await file.text();
+      const text = await readCsvTextFile(file);
       const rows = parseCsv(text);
       previewRows = mapCsvRows(rows, targetMonth);
       renderPreview();
